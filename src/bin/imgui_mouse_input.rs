@@ -29,7 +29,7 @@ fn main() {
             set_window_size(size);
             ui.window("Mouse Input Method")
                 .size(size, Condition::Always)
-                .position([0.0, 0.0], Condition::Always) // <-- Force position to (0,0)
+                .position([0.0, 0.0], Condition::Always)
                 .flags(window_flags)
                 .build(|| {
                     ui.text("Mouse Input Method");
@@ -42,16 +42,6 @@ fn main() {
                     if ui.button("Move Right") {
                         mouse_input.move_relative(100, 0);
                     }
-                    ui.separator();
-                    ui.text(format!("Current: {}", mouse_input.get_current_name()));
-                    ui.separator();
-                    if ui.button("Minimize") {
-                        minimized = true;
-                    }
-                    ui.same_line();
-                    if ui.button("Exit") {
-                        *should_run = false;
-                    }
                 });
         } else {
             let size = [120.0, 60.0];
@@ -60,15 +50,7 @@ fn main() {
                 .size(size, Condition::Always)
                 .position([0.0, 0.0], Condition::Always) // <-- Force position to (0,0)
                 .flags(window_flags)
-                .build(|| {
-                    if ui.button("Restore") {
-                        minimized = false;
-                    }
-                    ui.same_line();
-                    if ui.button("Exit") {
-                        *should_run = false;
-                    }
-                });
+                .build(|| {});
         }
     });
 }
