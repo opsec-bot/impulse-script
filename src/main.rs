@@ -1,29 +1,24 @@
 mod modules;
 
 use imgui::*;
+use std::path::PathBuf;
 use modules::mouse_input::MouseInput;
 use modules::support;
-use modules::handlers::setup_class::Setup;
 
 fn main() {
-    // --- Setup handler integration ---
-    let mut setup = Setup::new(true);
-    setup.get_mouse_sensitivity_settings();
-    setup.create_config_file();
-
-    let gfck_path = std::path::PathBuf::from("lib/GFCK.dll");
-    let ghub_path = std::path::PathBuf::from("lib/ghub_mouse.dll");
+    let gfck_path = PathBuf::from("lib/GFCK.dll");
+    let ghub_path = PathBuf::from("lib/ghub_mouse.dll");
     let mut mouse_input = unsafe {
         MouseInput::new(gfck_path, ghub_path).expect("Failed to load mouse input DLLs")
     };
     let mut current_method = 0;
     let items = ["GFCK", "GhubMouse"];
-    let minimized = false;
+    let mut minimized = false;
 
     // Closure to request window resize
     let _requested_size: Option<[f32; 2]> = None;
 
-    support::simple_init_with_resize(file!(), move |_should_run, ui, set_window_size| {
+    support::simple_init_with_resize(file!(), move |should_run, ui, set_window_size| {
         let window_flags =
             WindowFlags::NO_RESIZE |
             WindowFlags::NO_BRING_TO_FRONT_ON_FOCUS |

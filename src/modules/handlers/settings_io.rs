@@ -57,36 +57,36 @@ impl SettingsIO {
         }
     }
 
-    pub fn get_all_RCS_binds(&self) -> Vec<(String, String)> {
+    pub fn get_all_rcs_binds(&self) -> Vec<(String, String)> {
         self.settings
             .options(Self::RCS)
             .into_iter()
             .filter(|o| o.starts_with("bind_"))
             .map(|opt| {
-                let bind = self.get_RCS(&opt).unwrap_or_default();
+                let bind = self.get_rcs(&opt).unwrap_or_default();
                 let callback = opt.trim_start_matches("bind_").to_string();
                 (bind, callback)
             })
             .collect()
     }
 
-    pub fn get_RCS(&self, option: &str) -> Option<String> {
+    pub fn get_rcs(&self, option: &str) -> Option<String> {
         self.settings.get(Self::RCS, option)
     }
 
-    pub fn set_RCS(&mut self, option: &str, value: &str) {
+    pub fn set_rcs(&mut self, option: &str, value: &str) {
         self.settings.update(Self::RCS, option, value);
     }
 
     pub fn add_timing(&mut self, weapon: &str, class_name: &str, timing: i32) {
         let key = format!("{}_timings", class_name);
-        let raw = self.get_RCS(&key).unwrap_or_else(|| "{}".into());
+        let raw = self.get_rcs(&key).unwrap_or_else(|| "{}".into());
         let mut map: std::collections::BTreeMap<String, i32> = serde_json
             ::from_str(&raw)
             .unwrap_or_default();
         map.insert(weapon.to_string(), timing);
         let updated = serde_json::to_string(&map).unwrap();
-        self.set_RCS(&key, &updated);
+        self.set_rcs(&key, &updated);
         self.settings.write();
     }
 

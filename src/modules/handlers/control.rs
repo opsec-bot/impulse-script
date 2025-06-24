@@ -1,147 +1,164 @@
-use std::sync::{Arc, Mutex};
-use std::thread::{self, JoinHandle};
+use std::sync::{ Arc, Mutex, mpsc::Sender };
+use std::thread::{ self, JoinHandle };
 use std::time::Duration;
-use std::path::PathBuf;
 
-use winapi::um::winuser::{GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON};
+use winapi::um::winuser::{ GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON };
 
 use crate::modules::mouse_input::MouseInput;
+use crate::modules::mouse_command::MouseCommand; // Update the path to where MouseCommand is defined
+
+struct ControlState {
+    stop: bool,
+    running: bool,
+    active: bool,
+    move_x: i32,
+    move_y: i32,
+    move_x_modifier: f32,
+    timing: f32,
+}
 
 pub struct Control {
     name: &'static str,
     thread: Option<JoinHandle<()>>,
-    stop: Arc<Mutex<bool>>,
-    running: Arc<Mutex<bool>>,
-    active: Arc<Mutex<bool>>,
-    move_x: Arc<Mutex<i32>>,
-    move_y: Arc<Mutex<i32>>,
-    move_x_modifier: Arc<Mutex<f32>>,
-    timing: Arc<Mutex<f32>>,
-    threaded: bool,
-    mouse_input: MouseInput<'static>,
+    state: Arc<Mutex<ControlState>>,
+    mouse_input: Arc<Mutex<MouseInput<'static>>>,
+    sender: Option<Sender<MouseCommand>>,
 }
 
 impl Control {
-    pub fn new() -> Self {
-        let gfck_path = PathBuf::from("lib/GFCK.dll");
-        let ghub_path = PathBuf::from("lib/ghub_mouse.dll");
-        let mouse_input = unsafe {
-            MouseInput::new(gfck_path, ghub_path).expect("Failed to load mouse input DLLs")
-        };
+    pub fn new(mouse_input: Arc<Mutex<MouseInput<'static>>>) -> Self {
         Control {
             name: "Control",
             thread: None,
-            stop: Arc::new(Mutex::new(false)),
-            running: Arc::new(Mutex::new(false)),
-            active: Arc::new(Mutex::new(false)),
-            move_x: Arc::new(Mutex::new(0)),
-            move_y: Arc::new(Mutex::new(0)),
-            move_x_modifier: Arc::new(Mutex::new(1.0)),
-            timing: Arc::new(Mutex::new(0.0)),
-            threaded: false,
+            state: Arc::new(
+                Mutex::new(ControlState {
+                    stop: false,
+                    running: false,
+                    active: false,
+                    move_x: 0,
+                    move_y: 0,
+                    move_x_modifier: 1.0,
+                    timing: 0.0,
+                })
+            ),
             mouse_input,
+            sender: None,
         }
     }
 
+    pub fn set_sender(&mut self, sender: Sender<MouseCommand>) {
+        self.sender = Some(sender);
+    }
+
+    /// Starts the control logic in a background thread.
+    /// If threaded is false, runs in the current thread (blocking).
     pub fn run_threaded(&mut self) {
-        self.threaded = true;
-        *self.running.lock().unwrap() = true;
-        let running = Arc::clone(&self.running);
-        let active = Arc::clone(&self.active);
-        let stop = Arc::clone(&self.stop);
-        let move_x = Arc::clone(&self.move_x);
-        let move_y = Arc::clone(&self.move_y);
-        let move_x_modifier = Arc::clone(&self.move_x_modifier);
-        let timing = Arc::clone(&self.timing);
-        let mut mouse_input = self.mouse_input.clone();
-
-        self.thread = Some(thread::spawn(move || {
-            while *running.lock().unwrap() {
-                if Self::check_status() {
-                    *active.lock().unwrap() = true;
-                } else {
-                    *active.lock().unwrap() = false;
-                    thread::sleep(Duration::from_millis(50));
-                    continue;
-                }
-
-                if !*stop.lock().unwrap() {
-                    let x = *move_x.lock().unwrap();
-                    let y = *move_y.lock().unwrap();
-                    let t = *timing.lock().unwrap();
-                    let x_mod = *move_x_modifier.lock().unwrap();
-
-                    mouse_input.move_relative(x, y);
-                    thread::sleep(Duration::from_secs_f32(t));
-                    *move_x.lock().unwrap() = (x as f32 * x_mod) as i32;
-                }
-            }
-        }));
-    }
-
-    pub fn run(&mut self) {
-        *self.running.lock().unwrap() = true;
-        while *self.running.lock().unwrap() {
-            if Self::check_status() {
-                *self.active.lock().unwrap() = true;
-                self.movement();
-            } else {
-                *self.active.lock().unwrap() = false;
-            }
+        let state = Arc::clone(&self.state);
+        let sender = self.sender.clone();
+        {
+            let mut s = state.lock().unwrap();
+            s.running = true;
         }
-    }
-
-    fn check_status() -> bool {
-        unsafe {
-            GetAsyncKeyState(VK_RBUTTON) < 0 && GetAsyncKeyState(VK_LBUTTON) < 0
-        }
+        self.thread = Some(
+            thread::spawn(move || {
+                while state.lock().unwrap().running {
+                    {
+                        let mut s = state.lock().unwrap();
+                        s.check_status();
+                        if !s.active {
+                            drop(s);
+                            thread::sleep(Duration::from_millis(50));
+                            continue;
+                        }
+                        if !s.stop {
+                            if let Some(ref sender) = sender {
+                                let x = s.move_x;
+                                let y = s.move_y;
+                                sender.send(MouseCommand::Move(x, y)).ok();
+                            }
+                            std::thread::sleep(Duration::from_secs_f32(s.timing));
+                        }
+                    }
+                }
+            })
+        );
     }
 
     pub fn cleanup(&mut self) {
-        *self.running.lock().unwrap() = false;
+        let mut s = self.state.lock().unwrap();
+        s.running = false;
+        drop(s);
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
     }
 
     pub fn reset(&mut self) {
-        *self.stop.lock().unwrap() = true;
-        *self.move_x.lock().unwrap() = 0;
-        *self.move_y.lock().unwrap() = 0;
-        *self.timing.lock().unwrap() = 0.0;
-        *self.move_x_modifier.lock().unwrap() = 1.0;
+        let mut s = self.state.lock().unwrap();
+        s.stop = true;
+        s.move_x = 0;
+        s.move_y = 0;
+        s.timing = 0.0;
+        s.move_x_modifier = 1.0;
     }
 
+    /// Call this when a weapon/hotkey is selected to set the current recoil profile.
     pub fn update(&mut self, x: i32, y: i32, t: i32, x_mod: f32) {
         self.reset();
-        *self.move_x.lock().unwrap() = x;
-        *self.move_y.lock().unwrap() = y;
-        *self.timing.lock().unwrap() = (t as f32) / 1000.0;
-        *self.move_x_modifier.lock().unwrap() = x_mod;
-        self.current(true);
-        *self.stop.lock().unwrap() = false;
+        let mut s = self.state.lock().unwrap();
+        // Calculate the correct movement for recoil compensation
+        // Use the same calculation as in convert_for_recoil_calculation for the selected scope
+        // For example, use the first value in ads_recoil (x1 ADS) for x, and y as the weapon's RPM or a fixed value
+        // t is the timing (ms between movements)
+        // x_mod is the x modifier (from GUI or config)
+        s.move_x = x; // This should be the calculated recoil compensation value (e.g., from ads_recoil)
+        s.move_y = y; // This should be the calculated vertical compensation (e.g., based on RPM)
+        s.timing = (t as f32) / 1000.0;
+        s.move_x_modifier = x_mod;
+        s.current(true);
+        s.stop = false;
     }
 
     pub fn current(&self, debug: bool) -> (i32, i32, f32, f32) {
-        let x = *self.move_x.lock().unwrap();
-        let y = *self.move_y.lock().unwrap();
-        let t = *self.timing.lock().unwrap();
-        let x_mod = *self.move_x_modifier.lock().unwrap();
-        if debug {
-            println!("current values: ({}, {}, {}, {})", x, y, t, x_mod);
+        let s = self.state.lock().unwrap();
+        s.current(debug)
+    }
+}
+
+// --- ControlState methods ---
+impl ControlState {
+    fn check_status(&mut self) {
+        let is_active = unsafe {
+            GetAsyncKeyState(VK_RBUTTON) < 0 && GetAsyncKeyState(VK_LBUTTON) < 0
+        };
+        if is_active && !self.active {
+            println!("Both mouse buttons pressed: starting recoil compensation");
         }
-        (x, y, t, x_mod)
+        self.active = is_active;
     }
 
-    pub fn movement(&mut self) {
-        if !*self.stop.lock().unwrap() {
-            let x = *self.move_x.lock().unwrap();
-            let y = *self.move_y.lock().unwrap();
-            let t = *self.timing.lock().unwrap();
-            let x_mod = *self.move_x_modifier.lock().unwrap();
-            self.mouse_input.move_relative(x, y);
-            thread::sleep(Duration::from_secs_f32(t));
-            *self.move_x.lock().unwrap() = (x as f32 * x_mod) as i32;
+    fn movement(&mut self, mouse_input: &mut MouseInput<'static>) {
+        if !self.stop {
+            mouse_input.move_relative(self.move_x, self.move_y);
+            std::thread::sleep(Duration::from_secs_f32(self.timing));
+            // Only update Y if you want vertical recoil, or keep both constant for fixed pattern
+            // self.move_y += 1; // Uncomment for increasing vertical recoil
+            // self.move_x = ...; // Only update if you want horizontal pattern
+            // Remove the exponential X update:
+            // self.move_x = ((self.move_x as f32) * self.move_x_modifier) as i32;
         }
+    }
+
+    fn current(&self, debug: bool) -> (i32, i32, f32, f32) {
+        if debug {
+            println!(
+                "current values: ({}, {}, {}, {})",
+                self.move_x,
+                self.move_y,
+                self.timing,
+                self.move_x_modifier
+            );
+        }
+        (self.move_x, self.move_y, self.timing, self.move_x_modifier)
     }
 }

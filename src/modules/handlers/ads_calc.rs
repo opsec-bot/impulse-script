@@ -1,33 +1,33 @@
 use std::collections::HashMap;
 
 pub struct ScopeSensitivityCalculator {
-    fov: f64,
-    sens: f64,
-    xfactor: f64,
-    x1modifier: f64,
-    x15modifier: f64,
-    x2modifier: f64,
-    x25modifier: f64,
-    x3modifier: f64,
-    x4modifier: f64,
+    pub fov: f64,
+    pub sens: f64,
+    pub x_factor: f64,
+    pub x1modifier: f64,
+    pub x15modifier: f64,
+    pub x2modifier: f64,
+    pub x25modifier: f64,
+    pub x3modifier: f64,
+    pub x4modifier: f64,
 }
 
 impl ScopeSensitivityCalculator {
     pub fn new(
         fov: f64,
         sens: f64,
-        xfactor: f64,
+        x_factor: f64,
         x1modifier: f64,
         x15modifier: f64,
         x2modifier: f64,
         x25modifier: f64,
         x3modifier: f64,
-        x4modifier: f64
+        x4modifier: f64,
     ) -> Self {
         Self {
             fov,
             sens,
-            xfactor,
+            x_factor,
             x1modifier,
             x15modifier,
             x2modifier,
@@ -38,35 +38,28 @@ impl ScopeSensitivityCalculator {
     }
 
     fn calculate_ads(&self, modifier: f64, fov_multiplier: f64, ads_multiplier: f64) -> i32 {
-        let fov_adjustment =
-            (fov_multiplier * self.fov).to_radians().tan() / self.fov.to_radians().tan();
-        (
-            (modifier / (ads_multiplier / fov_adjustment)) *
-            self.xfactor *
-            ads_multiplier *
-            self.sens
-        ).round() as i32
+        let fov_adjustment = (fov_multiplier * self.fov).to_radians().tan() / (self.fov.to_radians().tan());
+        ((modifier / (ads_multiplier / fov_adjustment) * self.x_factor * ads_multiplier * self.sens).round()) as i32
     }
 
     pub fn calculate_ads_values(&self) -> HashMap<String, i32> {
-        let mut result = HashMap::new();
-        result.insert("x1 ADS".to_string(), self.calculate_ads(self.x1modifier, 0.9, 0.6));
-        result.insert("x15 ADS".to_string(), self.calculate_ads(self.x15modifier, 0.59, 0.59));
-        result.insert("x2 ADS".to_string(), self.calculate_ads(self.x2modifier, 0.49, 0.49));
-        result.insert("x25 ADS".to_string(), self.calculate_ads(self.x25modifier, 0.42, 0.42));
-        result.insert("x3 ADS".to_string(), self.calculate_ads(self.x3modifier, 0.35, 0.35));
-        result.insert("x4 ADS".to_string(), self.calculate_ads(self.x4modifier, 0.3, 0.3));
-        result
+        let mut map = HashMap::new();
+        map.insert("x1 ADS".to_string(), self.calculate_ads(self.x1modifier, 0.9, 0.6));
+        map.insert("x15 ADS".to_string(), self.calculate_ads(self.x15modifier, 0.59, 0.59));
+        map.insert("x2 ADS".to_string(), self.calculate_ads(self.x2modifier, 0.49, 0.49));
+        map.insert("x25 ADS".to_string(), self.calculate_ads(self.x25modifier, 0.42, 0.42));
+        map.insert("x3 ADS".to_string(), self.calculate_ads(self.x3modifier, 0.35, 0.35));
+        map.insert("x4 ADS".to_string(), self.calculate_ads(self.x4modifier, 0.3, 0.3));
+        map
     }
 }
 
 pub struct CursorMovementCalculator;
 
 impl CursorMovementCalculator {
-    pub fn calculate_cursor_movement(ads_value: i32, new_sensitivity: i32) -> i32 {
-        let sensitivity = 8;
-        let movement = 3;
-        let k = (sensitivity * movement) as f64;
+    pub fn calculate_cursor_movement(new_sensitivity: i32, dpi: i32) -> i32 {
+        // SENSITIVITY = 8, MOVEMENT = 3, k = SENSITIVITY * MOVEMENT
+        let k = 8.0 * 3.0;
         let cursor_movement = k / (new_sensitivity as f64);
         cursor_movement.round() as i32
     }

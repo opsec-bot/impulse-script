@@ -32,9 +32,13 @@ impl<'a> MouseInput<'a> {
             return Err(format!("GHUB DLL not found at {:?}", ghub_dll).into());
         }
         Ok(Self {
-            gfck: InputMethodGFCK::new(gfck_dll.clone())?,
-            ghub: InputMethodGhubMouse::new(ghub_dll.clone())?,
-            current: InputMethodEnum::GFCK, // GFCK is default
+            gfck: unsafe {
+                InputMethodGFCK::new(gfck_dll.clone())?
+            },
+            ghub: unsafe {
+                InputMethodGhubMouse::new(ghub_dll.clone())?
+            },
+            current: InputMethodEnum::GFCK,
             gfck_path: gfck_dll,
             ghub_path: ghub_dll,
         })
@@ -77,6 +81,12 @@ impl<'a> MouseInput<'a> {
     }
 
     pub fn move_relative(&self, x: c_int, y: c_int) {
+        println!(
+            "[MouseInput] move_relative called with x: {}, y: {}, method: {}",
+            x,
+            y,
+            self.get_current_name()
+        );
         match self.current {
             InputMethodEnum::GFCK => self.gfck.move_relative(x, y),
             InputMethodEnum::GHUB => self.ghub.move_relative(x, y),
@@ -86,8 +96,9 @@ impl<'a> MouseInput<'a> {
     // Custom clone: creates a new MouseInput with the same DLLs and current method
     pub fn clone(&self) -> MouseInput<'static> {
         unsafe {
-            let mut new = MouseInput::new(self.gfck_path.clone(), self.ghub_path.clone())
-                .expect("Failed to clone MouseInput");
+            let mut new = MouseInput::new(self.gfck_path.clone(), self.ghub_path.clone()).expect(
+                "Failed to clone MouseInput"
+            );
             new.current = self.current;
             new
         }
