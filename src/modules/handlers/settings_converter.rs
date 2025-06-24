@@ -14,34 +14,27 @@ impl SettingsConverter {
         println!("{:?}", sections);
 
         for section in &sections {
-            if section == "HELPY" {
+            if section == "RCS" {
                 continue;
             }
 
-            if
-                let (Some(x), Some(y), Some(t)) = (
-                    settings.get(section, "X"),
-                    settings.get(section, "Y"),
-                    settings.get(section, "Timing"),
-                )
-            {
-                let parsed = vec![x.parse::<i32>(), y.parse::<i32>(), t.parse::<i32>()];
-                if parsed.iter().all(|v| v.is_ok()) {
-                    let joined = Settings::comma_join(
-                        &[parsed[0].unwrap(), parsed[1].unwrap(), parsed[2].unwrap()]
-                    );
-                    settings.update(section, "combined", joined);
-                }
+            let x = settings.get(section, "X").and_then(|v| v.parse::<i32>().ok());
+            let y = settings.get(section, "Y").and_then(|v| v.parse::<i32>().ok());
+            let t = settings.get(section, "Timing").and_then(|v| v.parse::<i32>().ok());
+
+            if let (Some(x_val), Some(y_val), Some(t_val)) = (x, y, t) {
+                let joined = Settings::comma_join(&[x_val, y_val, t_val]);
+                settings.update(section, "combined", joined);
             }
         }
 
-        if !settings.check_section_exist("HELPY") {
-            settings.create_section("HELPY");
-            settings.create_section("HELPY_HOTKEY");
+        if !settings.check_section_exist("RCS") {
+            settings.create_section("RCS");
+            settings.create_section("RCS_HOTKEY");
 
-            let helpy_default = SettingsConverter::default_helpy_map();
-            for (key, val) in helpy_default {
-                settings.update("HELPY", &key, val);
+            let RCS_default = SettingsConverter::default_RCS_map();
+            for (key, val) in RCS_default {
+                settings.update("RCS", &key, val);
             }
         }
 
@@ -50,7 +43,7 @@ impl SettingsConverter {
         Self { settings }
     }
 
-    fn default_helpy_map() -> HashMap<String, String> {
+    fn default_RCS_map() -> HashMap<String, String> {
         HashMap::from([
             ("ingame_default".into(), "90,7,58,146".into()),
             (

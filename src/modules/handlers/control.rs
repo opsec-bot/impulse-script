@@ -1,10 +1,11 @@
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
+use std::path::PathBuf;
 
 use winapi::um::winuser::{GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON};
 
-use crate::mouse_input::MouseInput; // This must be implemented exactly as your Python MouseInput class
+use crate::modules::mouse_input::MouseInput;
 
 pub struct Control {
     name: &'static str,
@@ -17,11 +18,16 @@ pub struct Control {
     move_x_modifier: Arc<Mutex<f32>>,
     timing: Arc<Mutex<f32>>,
     threaded: bool,
-    mouse_input: MouseInput,
+    mouse_input: MouseInput<'static>,
 }
 
 impl Control {
     pub fn new() -> Self {
+        let gfck_path = PathBuf::from("lib/GFCK.dll");
+        let ghub_path = PathBuf::from("lib/ghub_mouse.dll");
+        let mouse_input = unsafe {
+            MouseInput::new(gfck_path, ghub_path).expect("Failed to load mouse input DLLs")
+        };
         Control {
             name: "Control",
             thread: None,
@@ -33,7 +39,7 @@ impl Control {
             move_x_modifier: Arc::new(Mutex::new(1.0)),
             timing: Arc::new(Mutex::new(0.0)),
             threaded: false,
-            mouse_input: MouseInput::new(),
+            mouse_input,
         }
     }
 

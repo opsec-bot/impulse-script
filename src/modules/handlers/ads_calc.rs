@@ -89,11 +89,10 @@ mod tests {
             177.0,
             200.0
         );
-        let recoil_calculator = CursorMovementCalculator;
 
         let ads_values = calculator.calculate_ads_values();
         for (scope, ads_val) in ads_values.iter() {
-            let recoil = recoil_calculator.calculate_cursor_movement(*ads_val, 800);
+            let recoil = CursorMovementCalculator::calculate_cursor_movement(*ads_val, 800);
             println!("{}: {}\nRecoil Amount: {}", scope, ads_val, recoil);
         }
     }

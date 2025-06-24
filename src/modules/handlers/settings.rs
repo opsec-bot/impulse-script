@@ -1,5 +1,6 @@
 use std::path::Path;
-use ini::Ini;
+use std::fs::File;
+use configparser::ini::Ini;
 
 #[derive(Debug)]
 pub struct Settings {
@@ -17,56 +18,55 @@ impl Settings {
 
     pub fn create(&self) {
         if !Path::new(&self.file_name).exists() {
-            let _ = std::fs::File::create(&self.file_name);
+            let _ = File::create(&self.file_name);
         }
     }
 
     pub fn read(&mut self) {
-        self.config = Ini::load_from_file(&self.file_name).unwrap_or_else(|_| Ini::new());
+        let _ = self.config.load(&self.file_name);
     }
 
     pub fn sections(&self) -> Vec<String> {
-        self.config
-            .sections()
-            .filter_map(|s| s.as_ref().map(|s| s.to_string()))
-            .collect()
+        self.config.sections()
     }
 
     pub fn options(&self, section: &str) -> Vec<String> {
         self.config
-            .section(Some(section))
+            .get_map()
+            .as_ref()
+            .and_then(|map| map.get(section))
             .map(|props| props.keys().cloned().collect())
             .unwrap_or_default()
     }
 
     pub fn get(&self, section: &str, option: &str) -> Option<String> {
-        self.config
-            .get_from(Some(section), option)
-            .map(|v| v.to_string())
+        self.config.get(section, option)
     }
 
     pub fn update(&mut self, section: &str, option: &str, value: impl ToString) {
-        self.config
-            .with_section(Some(section))
-            .set(option, &value.to_string());
+        let value_str = value.to_string();
+        self.config.set(section, option, Some(value_str));
     }
 
     pub fn check_section_exist(&self, section: &str) -> bool {
-        self.config.section(Some(section)).is_some()
-    }
-
-    pub fn delete_section(&mut self, section: &str) {
-        self.config.delete(Some(section));
+        self.config
+            .get_map()
+            .as_ref()
+            .map(|map| map.contains_key(section))
+            .unwrap_or(false)
     }
 
     pub fn create_section(&mut self, section: &str) {
         if !self.check_section_exist(section) {
-            self.config.with_section(Some(section));
+            // configparser doesn't have a direct create_section, so set a dummy key
+            self.config.set(section, "__dummy__", Some("".to_string()));
+            // Remove the dummy key by setting it to None
+            self.config.set(section, "__dummy__", None);
         }
     }
 
     pub fn write(&self) {
-        let _ = self.config.write_to_file(&self.file_name);
+        let _ = self.config.write(&self.file_name);
     }
 
     pub fn check_updated(&self, section: &str, option: &str, value: &str) -> bool {
