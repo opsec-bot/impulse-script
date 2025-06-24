@@ -1,41 +1,57 @@
 mod modules;
 
+use imgui::*;
+use std::path::PathBuf;
 use modules::mouse_input::MouseInput;
-use std::{ path::PathBuf, sync::{ Arc, atomic::{ AtomicBool, Ordering } }, thread, time::Duration };
-use windows::Win32::UI::Input::KeyboardAndMouse::{ GetAsyncKeyState, VK_F7 };
+use modules::support;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let gfck_path = PathBuf::from("lib/GFCK.dll");
     let ghub_path = PathBuf::from("lib/ghub_mouse.dll");
+    let mut mouse_input = unsafe {
+        MouseInput::new(gfck_path, ghub_path).expect("Failed to load mouse input DLLs")
+    };
+    let mut current_method = 0;
+    let items = ["GFCK", "GhubMouse"];
+    let mut minimized = false;
 
-    let mouse_input = unsafe { MouseInput::new(gfck_path, ghub_path)? };
+    // Closure to request window resize
+    let _requested_size: Option<[f32; 2]> = None;
 
-    println!("Current input method: {}", mouse_input.get_current_name());
+    support::simple_init_with_resize(file!(), move |should_run, ui, set_window_size| {
+        let window_flags =
+            WindowFlags::NO_RESIZE |
+            WindowFlags::NO_BRING_TO_FRONT_ON_FOCUS |
+            WindowFlags::NO_MOVE |
+            WindowFlags::NO_TITLE_BAR;
 
-    let running = Arc::new(AtomicBool::new(false));
-    let toggle_state = running.clone();
-
-    thread::spawn(move || {
-        let mut prev_state = false;
-        loop {
-            let pressed = unsafe { (GetAsyncKeyState(VK_F7.0 as i32) & (0x8000u16 as i16)) != 0 };
-            if pressed && !prev_state {
-                toggle_state.store(!toggle_state.load(Ordering::SeqCst), Ordering::SeqCst);
-                println!("Toggled: {}", toggle_state.load(Ordering::SeqCst));
-            }
-            prev_state = pressed;
-            thread::sleep(Duration::from_millis(50));
+        if !minimized {
+            let size = [320.0, 160.0];
+            set_window_size(size);
+            ui.window("Mouse Input Method")
+                .size(size, Condition::Always)
+                .position([0.0, 0.0], Condition::Always)
+                .flags(window_flags)
+                .build(|| {
+                    ui.text("Mouse Input Method");
+                    if ui.combo_simple_string("Input Method", &mut current_method, &items) {
+                        mouse_input.set_current(items[current_method]);
+                    }
+                    if ui.button("Test Click") {
+                        mouse_input.click(1);
+                    }
+                    if ui.button("Move Right") {
+                        mouse_input.move_relative(100, 0);
+                    }
+                });
+        } else {
+            let size = [120.0, 60.0];
+            set_window_size(size);
+            ui.window("Minimized")
+                .size(size, Condition::Always)
+                .position([0.0, 0.0], Condition::Always)
+                .flags(window_flags)
+                .build(|| {});
         }
     });
-
-    while cfg!(windows) {
-        if running.load(Ordering::SeqCst) {
-            mouse_input.click(1);
-            thread::sleep(Duration::from_millis(30));
-        } else {
-            thread::sleep(Duration::from_millis(10));
-        }
-    }
-
-    Ok(())
 }

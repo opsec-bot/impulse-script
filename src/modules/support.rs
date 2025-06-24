@@ -10,7 +10,6 @@ use imgui_winit_support::{ HiDpiMode, WinitPlatform };
 use std::path::Path;
 use std::time::Instant;
 
-
 pub const FONT_SIZE: f32 = 13.0;
 
 #[allow(dead_code)] // annoyingly, RA yells that this is unusued
@@ -111,18 +110,17 @@ pub fn init_with_startup<FInit, FUi>(title: &str, mut startup: FInit, mut run_ui
         .expect("EventLoop error");
 }
 
-pub fn simple_init_with_resize<F: FnMut(&mut bool, &mut Ui, &mut dyn FnMut([f32; 2])) + 'static>(title: &str, run_ui: F) {
+pub fn simple_init_with_resize<F: FnMut(&mut bool, &mut Ui, &mut dyn FnMut([f32; 2])) + 'static>(
+    title: &str,
+    run_ui: F
+) {
     init_with_startup_with_resize(title, |_, _, _| {}, run_ui);
 }
 
-pub fn init_with_startup_with_resize<FInit, FUi>(
-    title: &str,
-    mut startup: FInit,
-    mut run_ui: FUi,
-)
-where
-    FInit: FnMut(&mut Context, &mut Renderer, &Display<WindowSurface>) + 'static,
-    FUi: FnMut(&mut bool, &mut Ui, &mut dyn FnMut([f32; 2])) + 'static,
+pub fn init_with_startup_with_resize<FInit, FUi>(title: &str, mut startup: FInit, mut run_ui: FUi)
+    where
+        FInit: FnMut(&mut Context, &mut Renderer, &Display<WindowSurface>) + 'static,
+        FUi: FnMut(&mut bool, &mut Ui, &mut dyn FnMut([f32; 2])) + 'static
 {
     let mut imgui = create_context();
 
@@ -181,9 +179,13 @@ where
                     let mut run = true;
                     let mut requested_size: Option<[f32; 2]> = None;
                     // Provide a callback to request window resize
-                    run_ui(&mut run, ui, &mut |size: [f32; 2]| {
-                        requested_size = Some(size);
-                    });
+                    run_ui(
+                        &mut run,
+                        ui,
+                        &mut (|size: [f32; 2]| {
+                            requested_size = Some(size);
+                        })
+                    );
                     if !run {
                         window_target.exit();
                     }
@@ -191,7 +193,9 @@ where
                     // Actually resize the window if requested
                     if let Some(size) = requested_size {
                         use imgui_winit_support::winit::dpi::LogicalSize;
-                        let _ = window.request_inner_size(LogicalSize::new(size[0] as f64, size[1] as f64));
+                        let _ = window.request_inner_size(
+                            LogicalSize::new(size[0] as f64, size[1] as f64)
+                        );
                         display.resize((size[0] as u32, size[1] as u32));
                     }
 
