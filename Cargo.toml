@@ -4,13 +4,19 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+imgui = "0.12"
+imgui-glow-renderer = "0.13"
+imgui-winit-support = "0.13"
+glow = "0.16"
+winit = "0.30"
 libloading = "0.8.8"
+glium = { version = "0.35.0", default-features = true }
+imgui-glium-renderer = "0.13.0"
 
 [dependencies.windows]
-version = "0.56"
+version = "0.61.3"
 features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
     "Win32_Foundation"
 ]
-
