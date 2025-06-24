@@ -3,6 +3,9 @@ name = "rust-macro"
 version = "0.1.0"
 edition = "2024"
 
+[dependencies]
+libloading = "0.8.8"
+
 [dependencies.windows]
 version = "0.56"
 features = [
