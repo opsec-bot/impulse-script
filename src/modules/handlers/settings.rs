@@ -2,7 +2,6 @@ use std::path::Path;
 use std::fs::File;
 use configparser::ini::Ini;
 
-#[derive(Debug)]
 pub struct Settings {
     pub config: Ini,
     pub file_name: String,

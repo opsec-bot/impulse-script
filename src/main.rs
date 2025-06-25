@@ -31,12 +31,19 @@ fn main() {
     // --- Weapon/Hotkey State ---
     let mut weapon_classes: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut weapon_to_class: HashMap<String, String> = HashMap::new();
+    let mut all_weapons = settings_io.get_all_wep();
+    all_weapons.sort();
     let mut weapon_rpm: HashMap<String, i32> = HashMap::new();
+
+    for weapon in &all_weapons {
+        if let Some(rpm) = settings_io.get_weapon_rpm(weapon) {
+            weapon_rpm.insert(weapon.clone(), rpm);
+        }
+    }
+
     let mut weapon_xy: HashMap<String, (f32, f32)> = HashMap::new();
     let weapon_xmod: HashMap<String, f32> = HashMap::new();
     let weapon_xmod_acog: HashMap<String, f32> = HashMap::new();
-    let mut all_weapons = settings_io.get_all_wep();
-    all_weapons.sort();
     let mut selected_weapon: Option<String> = None;
     let mut acog_enabled = false;
 
@@ -226,8 +233,9 @@ fn main() {
                                 prev_weapon = Some(weapon.clone());
                                 prev_acog = acog_enabled;
 
-                                // --- THIS IS THE IMPORTANT PART ---
-                                control.update(x as i32, y as i32, y as i32, xmod_val);
+                                let rpm = weapon_rpm.get(weapon).copied().unwrap_or(600) as f32;
+                                let timing = (4234.44 / rpm + 2.58).round() as i32;
+                                control.update(x as i32, y as i32, timing, xmod_val);
                                 let _ = control.current(true);
                             }
 
@@ -256,7 +264,9 @@ fn main() {
                                     xmod_val,
                                     acog_enabled
                                 );
-                                control.update(x as i32, y as i32, y as i32, xmod_val);
+                                let rpm = weapon_rpm.get(weapon).copied().unwrap_or(600) as f32;
+                                let timing = (4234.44 / rpm + 2.58).round() as i32;
+                                control.update(x as i32, y as i32, timing, xmod_val);
                                 let _ = control.current(true);
                             }
                         }

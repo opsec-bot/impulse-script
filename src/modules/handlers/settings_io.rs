@@ -94,6 +94,10 @@ impl SettingsIO {
         map
     }
 
+    pub fn get_weapon_rpm(&self, wep_name: &str) -> Option<i32> {
+        self.settings.get(wep_name, "RPM").and_then(|v| v.parse().ok())
+    }
+
     pub fn get_weapon_values(&self, wep_name: &str, acog: bool) -> (f32, f32, f32) {
         if acog {
             let x = self.settings

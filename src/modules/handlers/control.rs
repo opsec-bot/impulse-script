@@ -47,7 +47,6 @@ impl Control {
         self.sender = Some(sender);
     }
 
-    #[allow(unused_variables)]
     pub fn run_threaded(&mut self) {
         let state = Arc::clone(&self.state);
         let sender = self.sender.clone();
@@ -126,7 +125,7 @@ impl ControlState {
     fn current(&self, debug: bool) -> (i32, i32, f32, f32) {
         if debug {
             println!(
-                "current values: ({}, {}, {}, {})",
+                "current values: ({}, {}, {:.5}, {})",
                 self.move_x,
                 self.move_y,
                 self.timing,

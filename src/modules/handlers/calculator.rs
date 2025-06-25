@@ -55,15 +55,3 @@ impl CursorMovementCalculator {
         cursor_movement.round() as i32
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_rcs_values() {
-        let mut calc = ScopeSensitivityCalculator::new();
-        let rcs = calc.get_rcs_values(90.0, 7.0, 58.0, 146.0, 0.02);
-        println!("{:?}", rcs);
-    }
-}

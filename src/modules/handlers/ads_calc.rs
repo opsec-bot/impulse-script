@@ -70,29 +70,3 @@ impl CursorMovementCalculator {
         cursor_movement.round() as i32
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_recoil_output() {
-        let calculator = ScopeSensitivityCalculator::new(
-            90.0,
-            7.0,
-            0.02,
-            58.0,
-            100.0,
-            123.0,
-            146.0,
-            177.0,
-            200.0
-        );
-
-        let ads_values = calculator.calculate_ads_values();
-        for (scope, ads_val) in ads_values.iter() {
-            let recoil = CursorMovementCalculator::calculate_cursor_movement(*ads_val, 800);
-            println!("{}: {}\nRecoil Amount: {}", scope, ads_val, recoil);
-        }
-    }
-}
