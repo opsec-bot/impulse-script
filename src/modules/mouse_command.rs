@@ -1,4 +1,3 @@
-#[allow(dead_code)]
 pub enum MouseCommand {
     Move(i32, i32),
     Click(i32),

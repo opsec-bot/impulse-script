@@ -6,10 +6,10 @@ use modules::support;
 use modules::handlers::{ setup_class::Setup, settings_io::SettingsIO };
 use modules::handlers::control::Control;
 use modules::mouse_command::MouseCommand;
+use modules::xmod_state::XmodState;
 
 use std::collections::{ HashMap, BTreeMap };
 use std::sync::{ Arc, Mutex, mpsc::{ Sender, Receiver, channel } };
-
 
 fn main() {
     // --- State Initialization ---
@@ -59,7 +59,6 @@ fn main() {
     let mut sens = setup.get_sensitivity() as i32;
     let mut sens_1x = setup.get_sensitivity_modifier_1() as i32;
     let mut sens_25x = setup.get_sensitivity_modifier_25() as i32;
-    let mut xmod = setup.get_x_factor();
     let mut dpi = setup.get_dpi(); // Use the public getter method
 
     // --- Mouse Command Channel ---
@@ -81,7 +80,6 @@ fn main() {
                     weapon_to_class.insert(weapon.clone(), class.to_string());
                     weapon_rpm.insert(weapon.clone(), rpm);
                     all_weapons.push(weapon.clone());
-                    // Load X/Y/Xmod and X/Y/Xmod_acog if present
                     let x = config
                         .get(&weapon, "X")
                         .and_then(|v| v.parse().ok())
@@ -129,10 +127,8 @@ fn main() {
             .map(|s| s.as_str())
             .unwrap_or("AR");
         let rpm = weapon_rpm.get(weapon).copied().unwrap_or(600);
-        // Calculate the correct timing (interval between shots) in milliseconds
-        // RPM = rounds per minute, so interval_ms = 60000 / RPM
-        let interval_ms = if rpm > 0 { 60000.0 / rpm as f32 } else { 100.0 };
-        let (x, y) = match class {
+        let interval_ms = if rpm > 0 { 60000.0 / (rpm as f32) } else { 100.0 };
+        let (x, _) = match class {
             "AR" | "SMG" | "LMG" | "MP" => {
                 let rcs_vals = calc.get_rcs_values(
                     setup.get_fov() as f64,
@@ -142,17 +138,18 @@ fn main() {
                     setup.get_x_factor() as f64
                 );
                 let x_val = rcs_vals.get(0).copied().unwrap_or(0) as f32;
-                let y_val = 1.0; // You can adjust this as needed for vertical compensation
+                let y_val = 1.0;
                 (x_val, y_val)
             }
             _ => (0.0, 0.0),
         };
-        // Store the interval_ms as the "Y" value for timing (or use it directly in control.update)
         weapon_xy.insert(weapon.clone(), (x, interval_ms));
     }
 
     // --- ImGui Main Loop ---
-    // Use the same trick to "hide" the window behind the ImGui window by always matching the window size and position.
+    let mut xmod_state = XmodState { x_flip: 1, x_once_done: false };
+    let mut prev_weapon: Option<String> = None;
+    let mut prev_acog = false;
     support::simple_init_with_resize(file!(), move |_should_run, ui, set_window_size| {
         let window_flags =
             WindowFlags::NO_RESIZE |
@@ -170,7 +167,40 @@ fn main() {
                 // Handle scheduled mouse commands on the main thread
                 while let Ok(cmd) = rx.try_recv() {
                     match cmd {
-                        MouseCommand::Move(x, y) => mouse_input.lock().unwrap().move_relative(x, y),
+                        MouseCommand::Move(mut x, y) => {
+                            // --- Xmod logic in main thread ---
+                            let xmod_val = if acog_enabled {
+                                weapon_xmod_acog
+                                    .get(selected_weapon.as_ref().unwrap())
+                                    .copied()
+                                    .unwrap_or(1.0)
+                            } else {
+                                weapon_xmod
+                                    .get(selected_weapon.as_ref().unwrap())
+                                    .copied()
+                                    .unwrap_or(1.0)
+                            };
+                            match xmod_val as i32 {
+                                -1 => {
+                                    x *= xmod_state.x_flip;
+                                    xmod_state.x_flip *= -1;
+                                }
+                                0 => {
+                                    if xmod_state.x_once_done {
+                                        x = 0;
+                                    } else {
+                                        xmod_state.x_once_done = true;
+                                    }
+                                }
+                                1 => {
+                                    // No change
+                                }
+                                _ => {
+                                    x = ((x as f32) * xmod_val) as i32;
+                                }
+                            }
+                            mouse_input.lock().unwrap().move_relative(x, y);
+                        }
                         MouseCommand::Click(b) => mouse_input.lock().unwrap().click(b),
                         MouseCommand::Down(b) => mouse_input.lock().unwrap().down(b),
                         MouseCommand::Up(b) => mouse_input.lock().unwrap().up(b),
@@ -180,7 +210,7 @@ fn main() {
                 if let Some(_tab_bar_token) = ui.tab_bar("main_tabs") {
                     // --- Recoil Control Tab ---
                     if let Some(_tab_item_token) = ui.tab_item("Recoil Control") {
-                        // Weapon dropdown (searchable if possible)
+                        // Weapon dropdown
                         if
                             let Some(_combo_token) = ui.begin_combo(
                                 "Select Weapon",
@@ -209,13 +239,22 @@ fn main() {
                         if ui.checkbox("Acog (2.5x)", &mut acog_enabled) {
                             // No-op, state is toggled
                         }
+
                         // X/Y Sliders for selected weapon (default or acog)
                         if let Some(weapon) = &selected_weapon {
+                            if prev_weapon != Some(weapon.clone()) || prev_acog != acog_enabled {
+                                // Reset xmod state when switching weapons or acog state
+                                xmod_state.x_flip = 1;
+                                xmod_state.x_once_done = false;
+                                prev_weapon = Some(weapon.clone());
+                                prev_acog = acog_enabled;
+                            }
                             let (mut x, mut y) = if acog_enabled {
                                 weapon_xy_acog.get(weapon).copied().unwrap_or((0.0, 1.0))
                             } else {
                                 weapon_xy.get(weapon).copied().unwrap_or((0.0, 1.0))
                             };
+                            // Use the stored xmod value for the selected weapon
                             let mut xmod_val = if acog_enabled {
                                 weapon_xmod_acog.get(weapon).copied().unwrap_or(0.02)
                             } else {
@@ -233,27 +272,25 @@ fn main() {
                             xmod_val = xmod_int as f32;
 
                             if changed {
+                                // Only update control when values actually change!
                                 if acog_enabled {
                                     weapon_xy_acog.insert(weapon.clone(), (x, y));
                                     weapon_xmod_acog.insert(weapon.clone(), xmod_val);
                                     settings_io.settings.update(weapon, "X_acog", x);
                                     settings_io.settings.update(weapon, "Y_acog", y);
                                     settings_io.settings.update(weapon, "Xmod_acog", xmod_val);
-                                    // Use control for acog profile as well
-                                    control.update(x as i32, y as i32, y as i32, xmod_val); // y as i32 is interval_ms
                                 } else {
                                     weapon_xy.insert(weapon.clone(), (x, y));
                                     weapon_xmod.insert(weapon.clone(), xmod_val);
                                     settings_io.settings.update(weapon, "X", x);
                                     settings_io.settings.update(weapon, "Y", y);
                                     settings_io.settings.update(weapon, "Xmod", xmod_val);
-                                    // Use control for default profile
-                                    control.update(x as i32, y as i32, y as i32, xmod_val); // y as i32 is interval_ms
                                 }
+                                control.update(x as i32, y as i32, y as i32, xmod_val);
                                 settings_io.settings.write();
-                                // Show current values for debug
                                 let _ = control.current(true);
                             }
+                            // Remove the else block that calls control.update every frame!
                         }
 
                         // Add Weapon Dialog
@@ -484,22 +521,18 @@ fn main() {
                             setup.set_sensitivity_modifier_25(sens_25x);
                         }
                     }
-
-                    // End Tab Bar
-                    // (No explicit end_tab_bar() needed; handled by TabBarToken drop)
                 }
             });
     });
-
-    // NOTE:
-    // You need a window to render on, so you can't get rid of it.
-    // What you can do is make it the exact size of your imgui window so it's invisible.
-    // This is something you have to do in the backend swapchain management code.
-    // I believe that the "docking" branch of ImGui has example of it. Search for "multi viewport".
-    //
-    // In this main.rs, the window is always sized and positioned to match the ImGui window,
-    // and with the right flags (NO_TITLE_BAR, NO_RESIZE, etc.)
-    // it will appear borderless and "invisible" except for the ImGui content.
-    // For true borderless/frameless, ensure your backend (winit, sdl2, etc.) also sets the native window size
-    // to match the ImGui window and disables window decorations if possible.
 }
+
+// ---
+// Values
+// X = Horizontal Amount
+//     >0 goes right | <0 goes left
+// Y = Vertical Amount (use calculator to get yours)
+// Xmod = The Modifier that gets applied to X every iteration
+//     -1 Flips from Left -> Right -> Left
+//     0 Moves Horizontal once and then Stops
+//     1 does nothing since X * 1 = X
+// ---

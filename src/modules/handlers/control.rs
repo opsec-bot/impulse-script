@@ -15,6 +15,9 @@ struct ControlState {
     move_y: i32,
     move_x_modifier: f32,
     timing: f32,
+    // Track for Xmod flipping
+    x_flip: i32, // 1 or -1
+    x_once_done: bool,
 }
 #[allow(dead_code)]
 pub struct Control {
@@ -39,6 +42,8 @@ impl Control {
                     move_y: 0,
                     move_x_modifier: 1.0,
                     timing: 0.0,
+                    x_flip: 1,
+                    x_once_done: false,
                 })
             ),
             mouse_input,
@@ -50,8 +55,7 @@ impl Control {
         self.sender = Some(sender);
     }
 
-    /// Starts the control logic in a background thread.
-    /// If threaded is false, runs in the current thread (blocking).
+    #[allow(unused_variables)]
     pub fn run_threaded(&mut self) {
         let state = Arc::clone(&self.state);
         let sender = self.sender.clone();
@@ -83,6 +87,7 @@ impl Control {
             })
         );
     }
+
     #[allow(dead_code)]
     pub fn cleanup(&mut self) {
         let mut s = self.state.lock().unwrap();
@@ -106,15 +111,18 @@ impl Control {
     pub fn update(&mut self, x: i32, y: i32, t: i32, x_mod: f32) {
         self.reset();
         let mut s = self.state.lock().unwrap();
-        // Calculate the correct movement for recoil compensation
-        // Use the same calculation as in convert_for_recoil_calculation for the selected scope
-        // For example, use the first value in ads_recoil (x1 ADS) for x, and y as the weapon's RPM or a fixed value
-        // t is the timing (ms between movements)
-        // x_mod is the x modifier (from GUI or config)
-        s.move_x = x; // This should be the calculated recoil compensation value (e.g., from ads_recoil)
-        s.move_y = y; // This should be the calculated vertical compensation (e.g., based on RPM)
+        // X = Horizontal Amount (>0 right, <0 left)
+        // Y = Vertical Amount (use calculator)
+        // Xmod = Modifier applied to X every iteration:
+        //   -1: Flips X direction each iteration
+        //    0: Moves horizontal once, then stops
+        //    1: No modification (X stays the same)
+        s.move_x = x;
+        s.move_y = y;
         s.timing = (t as f32) / 1000.0;
         s.move_x_modifier = x_mod;
+        s.x_flip = 1;
+        s.x_once_done = false;
         s.current(true);
         s.stop = false;
     }
@@ -140,7 +148,30 @@ impl ControlState {
 
     fn movement(&mut self, mouse_input: &mut MouseInput<'static>) {
         if !self.stop {
-            mouse_input.move_relative(self.move_x, self.move_y);
+            // --- Xmod logic ---
+            let mut x = self.move_x;
+            match self.move_x_modifier as i32 {
+                -1 => {
+                    x *= self.x_flip;
+                    self.x_flip *= -1;
+                }
+                0 => {
+                    if self.x_once_done {
+                        x = 0;
+                    } else {
+                        self.x_once_done = true;
+                    }
+                }
+                1 => {
+                    // No change
+                }
+                _ => {
+                    // For other values, multiply X by modifier
+                    x = ((x as f32) * self.move_x_modifier) as i32;
+                }
+            }
+            // Move mouse
+            mouse_input.move_relative(x, self.move_y);
             std::thread::sleep(Duration::from_secs_f32(self.timing));
         }
     }

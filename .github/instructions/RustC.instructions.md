@@ -1,7 +1,3 @@
-Sure! Here’s a Rust-friendly rewrite of your C++ copilot instructions, adapted for idiomatic Rust development and tooling like `rustc`, `cargo`, and common Rust patterns:
-
----
-
 # Rust Programming Copilot Instructions
 
 ## Basic Principles
@@ -98,7 +94,3 @@ Sure! Here’s a Rust-friendly rewrite of your C++ copilot instructions, adapted
 * Use crates like `tokio` or `async-std` for async concurrency.
 * Avoid data races by adhering to Rust’s ownership and borrowing rules.
 * Use atomics (`AtomicBool`, `AtomicUsize`) for lock-free concurrency.
-
----
-
-If you want, I can also generate a Rust linter config or sample module following these principles!
