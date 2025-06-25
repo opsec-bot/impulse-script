@@ -5,8 +5,7 @@ use std::time::Duration;
 use winapi::um::winuser::{ GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON };
 
 use crate::modules::mouse_input::MouseInput;
-use crate::modules::mouse_command::MouseCommand; // Update the path to where MouseCommand is defined
-
+use crate::modules::mouse_command::MouseCommand;
 struct ControlState {
     stop: bool,
     running: bool,
@@ -15,8 +14,7 @@ struct ControlState {
     move_y: i32,
     move_x_modifier: f32,
     timing: f32,
-    // Track for Xmod flipping
-    x_flip: i32, // 1 or -1
+    x_flip: i32,
     x_once_done: bool,
 }
 #[allow(dead_code)]
