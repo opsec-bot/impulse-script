@@ -3,6 +3,7 @@ pub mod xmod_state;
 pub mod hotkey_handler;
 pub mod dll_injector;
 pub mod process_ghost;
+pub mod manual_mapper;
 
 pub use control::Control;
 pub use xmod_state::XmodState;

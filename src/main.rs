@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"] // Comment this line to see console output
+// #![windows_subsystem = "windows"] // Comment this line to see console output
 mod modules;
 
 use imgui::*;
@@ -11,7 +11,7 @@ use modules::core::{
     HotkeyHandler,
     HotkeyCommand,
     key_name_to_vk_code,
-    ProcessGhost,
+    ProcessGhost
 };
 
 use std::collections::{ HashMap };

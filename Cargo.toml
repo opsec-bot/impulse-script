@@ -28,7 +28,8 @@ features = [
     "wincon",
     "memoryapi",
     "libloaderapi",
-    "consoleapi"
+    "consoleapi",
+    "synchapi","errhandlingapi"
 ]
 
 [profile.release]

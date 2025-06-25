@@ -4,11 +4,11 @@ use std::ptr;
 #[cfg(windows)]
 use winapi::{
     ctypes::c_void,
-    shared::minwindef::{TRUE, FALSE},
+    shared::minwindef::{ TRUE, FALSE },
     um::{
-        processthreadsapi::{OpenProcess, CreateRemoteThread},
-        memoryapi::{VirtualAllocEx, WriteProcessMemory},
-        libloaderapi::{GetModuleHandleA, GetProcAddress},
+        processthreadsapi::{ OpenProcess, CreateRemoteThread },
+        memoryapi::{ VirtualAllocEx, WriteProcessMemory },
+        libloaderapi::{ GetModuleHandleA, GetProcAddress },
         handleapi::CloseHandle,
         winnt::{
             PROCESS_CREATE_THREAD,
@@ -29,12 +29,15 @@ use winapi::{
     },
 };
 
+use super::manual_mapper::ManualMapper;
+
 #[allow(dead_code)]
 pub struct DllInjector {
     hide_screenshare_dll: String,
     unhide_screenshare_dll: String,
     hide_taskbar_dll: String,
     unhide_taskbar_dll: String,
+    manual_mapper: ManualMapper,
 }
 
 #[allow(dead_code)]
@@ -45,6 +48,7 @@ impl DllInjector {
             unhide_screenshare_dll: "./lib/unhide_screenshare.dll".to_string(),
             hide_taskbar_dll: "./lib/hide_taskbar.dll".to_string(),
             unhide_taskbar_dll: "./lib/unhide_taskbar.dll".to_string(),
+            manual_mapper: ManualMapper::new(),
         }
     }
 
@@ -135,20 +139,124 @@ impl DllInjector {
         Err("DLL injection not supported on non-Windows platforms".to_string())
     }
 
-    pub fn hide_from_screenshare(&self, pid: u32) -> Result<(), String> {
-        self.inject_dll(pid, &self.hide_screenshare_dll)
+    /// Injects a DLL using enhanced manual mapping technique
+    pub fn inject_dll_manual_map(&mut self, pid: u32, dll_path: &str) -> Result<(), String> {
+        // Validate DLL file exists
+        if !std::path::Path::new(dll_path).exists() {
+            return Err(format!("DLL file not found: {}", dll_path));
+        }
+
+        // Read DLL file into memory
+        let dll_data = std::fs::read(dll_path)
+            .map_err(|e| format!("Failed to read DLL file '{}': {}", dll_path, e))?;
+
+        // Validate minimum file size
+        if dll_data.len() < 0x1000 {
+            return Err(format!("Invalid DLL file size: {} bytes", dll_data.len()));
+        }
+
+        // Configure manual mapper with enhanced stealth settings
+        self.manual_mapper.configure(true, true, true);
+
+        unsafe {
+            match self.manual_mapper.map_dll_to_process(pid, &dll_data) {
+                Ok(base_addr) => {
+                    println!(
+                        "DLL '{}' successfully mapped to process {} at address: {:p}",
+                        dll_path, pid, base_addr
+                    );
+                    Ok(())
+                }
+                Err(e) => Err(format!("Manual mapping of '{}' failed: {}", dll_path, e))
+            }
+        }
     }
 
-    pub fn unhide_from_screenshare(&self, pid: u32) -> Result<(), String> {
-        self.inject_dll(pid, &self.unhide_screenshare_dll)
+    /// Build dynamic path from components
+    fn build_dynamic_path(components: &[&str]) -> String {
+        components.join("")
     }
 
-    pub fn hide_from_taskbar(&self, pid: u32) -> Result<(), String> {
-        self.inject_dll(pid, &self.hide_taskbar_dll)
+    /// Enhanced hiding method with comprehensive stealth features
+    pub fn hide_from_screenshare_stealth(&mut self, pid: u32) -> Result<(), String> {
+        // Use dynamic path construction to avoid static string detection
+        let obfuscated_path = Self::build_dynamic_path(&[".", "/", "lib", "/", "hide_screenshare.dll"]);
+        
+        println!("Attempting stealth injection to process {} using manual mapping", pid);
+        self.inject_dll_manual_map(pid, &obfuscated_path)
     }
 
-    pub fn unhide_from_taskbar(&self, pid: u32) -> Result<(), String> {
-        self.inject_dll(pid, &self.unhide_taskbar_dll)
+    /// Advanced injection method with fallback strategy
+    pub fn inject_dll_with_fallback(&mut self, pid: u32, dll_path: &str, prefer_manual_map: bool) -> Result<(), String> {
+        if prefer_manual_map {
+            // Try manual mapping first
+            match self.inject_dll_manual_map(pid, dll_path) {
+                Ok(()) => {
+                    println!("Manual mapping injection successful for PID {}", pid);
+                    Ok(())
+                }
+                Err(manual_err) => {
+                    println!("Manual mapping failed: {}, falling back to standard injection", manual_err);
+                    // Fallback to standard injection
+                    self.inject_dll(pid, dll_path)
+                        .map_err(|std_err| format!("Both injection methods failed. Manual: {}, Standard: {}", manual_err, std_err))
+                }
+            }
+        } else {
+            // Try standard injection first
+            match self.inject_dll(pid, dll_path) {
+                Ok(()) => {
+                    println!("Standard injection successful for PID {}", pid);
+                    Ok(())
+                }
+                Err(std_err) => {
+                    println!("Standard injection failed: {}, falling back to manual mapping", std_err);
+                    // Fallback to manual mapping
+                    self.inject_dll_manual_map(pid, dll_path)
+                        .map_err(|manual_err| format!("Both injection methods failed. Standard: {}, Manual: {}", std_err, manual_err))
+                }
+            }
+        }
+    }
+
+    /// Hide from screenshare with choice of injection method and fallback
+    pub fn hide_from_screenshare_advanced(
+        &mut self,
+        pid: u32,
+        use_manual_map: bool
+    ) -> Result<(), String> {
+        if use_manual_map {
+            self.hide_from_screenshare_stealth(pid)
+        } else {
+            self.inject_dll_with_fallback(pid, &self.hide_screenshare_dll.clone(), false)
+        }
+    }
+
+    /// Hide from taskbar with choice of injection method and fallback
+    pub fn hide_from_taskbar_advanced(
+        &mut self,
+        pid: u32,
+        use_manual_map: bool
+    ) -> Result<(), String> {
+        let dll_path = self.hide_taskbar_dll.clone();
+        if use_manual_map {
+            self.inject_dll_manual_map(pid, &dll_path)
+        } else {
+            self.inject_dll_with_fallback(pid, &dll_path, false)
+        }
+    }
+
+    /// Gets information about the last manual mapping operation
+    pub fn get_mapping_info(&self) -> Option<(usize, usize, *const c_void)> {
+        if !self.manual_mapper.get_mapped_base().is_null() {
+            Some((
+                self.manual_mapper.get_original_base(),
+                self.manual_mapper.get_image_size(),
+                self.manual_mapper.get_mapped_base()
+            ))
+        } else {
+            None
+        }
     }
 
     pub fn find_process_by_name(&self, process_name: &str) -> Vec<u32> {
