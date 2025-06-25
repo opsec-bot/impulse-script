@@ -80,11 +80,49 @@ impl SettingsIO {
         Self { settings }
     }
 
-    pub fn get_xyt(&self, wep_name: &str) -> Option<(i32, i32, i32)> {
-        let x = self.settings.get(wep_name, "X")?.parse().ok()?;
-        let y = self.settings.get(wep_name, "Y")?.parse().ok()?;
-        let timing = self.settings.get(wep_name, "Timing")?.parse().ok()?;
-        Some((x, y, timing))
+    pub fn get_weapon_values(&self, wep_name: &str, acog: bool) -> (f32, f32, f32) {
+        if acog {
+            let x = self.settings
+                .get(wep_name, "X_acog")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0.0);
+            let y = self.settings
+                .get(wep_name, "Y_acog")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1.0);
+            let xmod = self.settings
+                .get(wep_name, "Xmod_acog")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0.02);
+            (x, y, xmod)
+        } else {
+            let x = self.settings
+                .get(wep_name, "X")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0.0);
+            let y = self.settings
+                .get(wep_name, "Y")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1.0);
+            let xmod = self.settings
+                .get(wep_name, "xmod")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0.02);
+            (x, y, xmod)
+        }
+    }
+
+    pub fn save_weapon_values(&mut self, wep_name: &str, x: f32, y: f32, xmod: f32, acog: bool) {
+        if acog {
+            self.settings.update(wep_name, "X_acog", x);
+            self.settings.update(wep_name, "Y_acog", y);
+            self.settings.update(wep_name, "Xmod_acog", xmod);
+        } else {
+            self.settings.update(wep_name, "X", x);
+            self.settings.update(wep_name, "Y", y);
+            self.settings.update(wep_name, "xmod", xmod);
+        }
+        self.settings.write();
     }
 
     pub fn get_all_wep(&self) -> Vec<String> {

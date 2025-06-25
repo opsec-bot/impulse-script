@@ -34,8 +34,7 @@ fn main() {
     let mut weapon_rpm: HashMap<String, i32> = HashMap::new();
     let mut weapon_xy: HashMap<String, (f32, f32)> = HashMap::new();
     let weapon_xmod: HashMap<String, f32> = HashMap::new();
-    let mut weapon_xy_acog: HashMap<String, (f32, f32)> = HashMap::new();
-    let mut weapon_xmod_acog: HashMap<String, f32> = HashMap::new();
+    let weapon_xmod_acog: HashMap<String, f32> = HashMap::new();
     let mut all_weapons = settings_io.get_all_wep();
     all_weapons.sort();
     let mut selected_weapon: Option<String> = None;
@@ -239,6 +238,16 @@ fn main() {
                                 selected_weapon.as_deref().unwrap_or("Select...")
                             )
                         {
+                            for weapon in &all_weapons {
+                                if
+                                    ui
+                                        .selectable_config(weapon)
+                                        .selected(selected_weapon.as_deref() == Some(weapon))
+                                        .build()
+                                {
+                                    selected_weapon = Some(weapon.clone());
+                                }
+                            }
                         }
                         // Acog toggle
                         if ui.checkbox("Acog (2.5x)", &mut acog_enabled) {
@@ -248,23 +257,17 @@ fn main() {
                         // X/Y Sliders for selected weapon (default or acog)
                         if let Some(weapon) = &selected_weapon {
                             if prev_weapon != Some(weapon.clone()) || prev_acog != acog_enabled {
-                                // Reset xmod state when switching weapons or acog state
                                 xmod_state.x_flip = 1;
                                 xmod_state.x_once_done = false;
                                 prev_weapon = Some(weapon.clone());
                                 prev_acog = acog_enabled;
                             }
-                            let (mut x, mut y) = if acog_enabled {
-                                weapon_xy_acog.get(weapon).copied().unwrap_or((0.0, 1.0))
-                            } else {
-                                weapon_xy.get(weapon).copied().unwrap_or((0.0, 1.0))
-                            };
-                            // Use the stored xmod value for the selected weapon
-                            let mut xmod_val = if acog_enabled {
-                                weapon_xmod_acog.get(weapon).copied().unwrap_or(0.02)
-                            } else {
-                                weapon_xmod.get(weapon).copied().unwrap_or(0.02)
-                            };
+                            // Use settings_io to load values
+                            let (mut x, mut y, mut xmod_val) = settings_io.get_weapon_values(
+                                weapon,
+                                acog_enabled
+                            );
+
                             let mut changed = false;
                             let mut x_int = x.round() as i32;
                             let mut y_int = y.round() as i32;
@@ -277,28 +280,16 @@ fn main() {
                             xmod_val = xmod_int as f32;
 
                             if changed {
-                                // Only update control when values actually change!
-                                if acog_enabled {
-                                    weapon_xy_acog.insert(weapon.clone(), (x, y));
-                                    weapon_xmod_acog.insert(weapon.clone(), xmod_val);
-                                    settings_io.settings.update(weapon, "X_acog", x);
-                                    settings_io.settings.update(weapon, "Y_acog", y);
-                                    settings_io.settings.update(weapon, "Xmod_acog", xmod_val);
-                                } else {
-                                    let combined = format!(
-                                        "{},{},{},{}",
-                                        x as i32,
-                                        y as i32,
-                                        y as i32,
-                                        xmod_val as f32
-                                    );
-                                    settings_io.save_wep(weapon, &combined);
-                                }
+                                settings_io.save_weapon_values(
+                                    weapon,
+                                    x,
+                                    y,
+                                    xmod_val,
+                                    acog_enabled
+                                );
                                 control.update(x as i32, y as i32, y as i32, xmod_val);
-                                settings_io.settings.write();
                                 let _ = control.current(true);
                             }
-                            // Remove the else block that calls control.update every frame!
                         }
 
                         // Add Weapon Dialog
