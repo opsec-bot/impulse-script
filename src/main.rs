@@ -68,7 +68,7 @@ fn main() {
     let (tx, rx): (Sender<MouseCommand>, Receiver<MouseCommand>) = channel();
 
     // --- Control Handler State ---
-    let mut control = Control::new(Arc::clone(&mouse_input));
+    let mut control = Control::new();
     control.set_sender(tx.clone());
     control.run_threaded();
 

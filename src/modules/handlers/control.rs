@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use winapi::um::winuser::{ GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON };
 
-use crate::modules::mouse_input::MouseInput;
 use crate::modules::mouse_command::MouseCommand;
 struct ControlState {
     stop: bool,
@@ -17,19 +16,15 @@ struct ControlState {
     x_flip: i32,
     x_once_done: bool,
 }
-#[allow(dead_code)]
 pub struct Control {
-    name: &'static str,
     thread: Option<JoinHandle<()>>,
     state: Arc<Mutex<ControlState>>,
-    mouse_input: Arc<Mutex<MouseInput<'static>>>,
     sender: Option<Sender<MouseCommand>>,
 }
 
 impl Control {
-    pub fn new(mouse_input: Arc<Mutex<MouseInput<'static>>>) -> Self {
+    pub fn new() -> Self {
         Control {
-            name: "Control",
             thread: None,
             state: Arc::new(
                 Mutex::new(ControlState {
@@ -44,7 +39,6 @@ impl Control {
                     x_once_done: false,
                 })
             ),
-            mouse_input,
             sender: None,
         }
     }
@@ -86,16 +80,6 @@ impl Control {
         );
     }
 
-    #[allow(dead_code)]
-    pub fn cleanup(&mut self) {
-        let mut s = self.state.lock().unwrap();
-        s.running = false;
-        drop(s);
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
-        }
-    }
-
     pub fn reset(&mut self) {
         let mut s = self.state.lock().unwrap();
         s.stop = true;
@@ -131,44 +115,12 @@ impl Control {
     }
 }
 
-#[allow(dead_code)]
-// --- ControlState methods ---
 impl ControlState {
     fn check_status(&mut self) {
         let is_active = unsafe {
             GetAsyncKeyState(VK_RBUTTON) < 0 && GetAsyncKeyState(VK_LBUTTON) < 0
         };
         self.active = is_active;
-    }
-
-    fn movement(&mut self, mouse_input: &mut MouseInput<'static>) {
-        if !self.stop {
-            // --- Xmod logic ---
-            let mut x = self.move_x;
-            match self.move_x_modifier as i32 {
-                -1 => {
-                    x *= self.x_flip;
-                    self.x_flip *= -1;
-                }
-                0 => {
-                    if self.x_once_done {
-                        x = 0;
-                    } else {
-                        self.x_once_done = true;
-                    }
-                }
-                1 => {
-                    // No change
-                }
-                _ => {
-                    // For other values, multiply X by modifier
-                    x = ((x as f32) * self.move_x_modifier) as i32;
-                }
-            }
-            // Move mouse
-            mouse_input.move_relative(x, self.move_y);
-            std::thread::sleep(Duration::from_secs_f32(self.timing));
-        }
     }
 
     fn current(&self, debug: bool) -> (i32, i32, f32, f32) {

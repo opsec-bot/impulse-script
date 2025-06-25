@@ -3,7 +3,6 @@ use crate::modules::input_method_ghub::InputMethodGhubMouse;
 use std::ffi::c_int;
 use std::path::PathBuf;
 
-#[allow(dead_code)]
 #[derive(Copy, Clone)]
 pub enum InputMethodEnum {
     GFCK,
@@ -19,7 +18,6 @@ pub struct MouseInput<'a> {
     ghub_path: PathBuf,
 }
 
-#[allow(dead_code)]
 impl<'a> MouseInput<'a> {
     pub unsafe fn new(
         gfck_dll: PathBuf,
@@ -90,17 +88,6 @@ impl<'a> MouseInput<'a> {
         match self.current {
             InputMethodEnum::GFCK => self.gfck.move_relative(x, y),
             InputMethodEnum::GHUB => self.ghub.move_relative(x, y),
-        }
-    }
-
-    // Custom clone: creates a new MouseInput with the same DLLs and current method
-    pub fn clone(&self) -> MouseInput<'static> {
-        unsafe {
-            let mut new = MouseInput::new(self.gfck_path.clone(), self.ghub_path.clone()).expect(
-                "Failed to clone MouseInput"
-            );
-            new.current = self.current;
-            new
         }
     }
 }
