@@ -108,7 +108,7 @@ fn main() {
     }
 
     // --- Application State ---
-    let mut rcs_enabled = true;
+    let mut rcs_enabled = false;
     let mut window_visible = true;
 
     // UI state variables to replace unsafe static
@@ -130,7 +130,7 @@ fn main() {
 
         // Reduce update frequency when not focused
         if !window_focused {
-            std::thread::sleep(std::time::Duration::from_millis(67));
+            std::thread::sleep(std::time::Duration::from_millis(16)); // ~60 FPS when not focused sometimes causes RCS to not work properly
         }
 
         let window_flags =
