@@ -82,6 +82,7 @@ impl Control {
     pub fn reset(&mut self) {
         let mut s = self.state.lock().unwrap();
         s.stop = true;
+        s.active = false;
         s.move_x = 0;
         s.move_y = 0;
         s.timing = 0.0;

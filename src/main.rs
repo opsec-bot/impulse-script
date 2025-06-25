@@ -4,7 +4,7 @@ use imgui::*;
 use modules::input::{ MouseInput, MouseCommand };
 use modules::ui::support;
 use modules::config::{ Setup, SettingsIO, WEAPON_CLASSES };
-use modules::core::{ Control, XmodState };
+use modules::core::{ Control, XmodState, HotkeyHandler, HotkeyCommand, key_name_to_vk_code };
 
 use std::collections::{ HashMap };
 use std::sync::{ Arc, Mutex, mpsc::{ Sender, Receiver, channel } };
@@ -65,17 +65,74 @@ fn main() {
     // --- Mouse Command Channel ---
     let (tx, rx): (Sender<MouseCommand>, Receiver<MouseCommand>) = channel();
 
+    // --- Hotkey Command Channel ---
+    let (hotkey_tx, hotkey_rx): (Sender<HotkeyCommand>, Receiver<HotkeyCommand>) = channel();
+
     // --- Control Handler State ---
     let mut control = Control::new();
     control.set_sender(tx);
     control.run_threaded();
 
+    // --- Hotkey Handler State ---
+    let mut hotkey_handler = HotkeyHandler::new();
+    hotkey_handler.set_sender(hotkey_tx);
+
+    // Set default hotkeys
+    if
+        let Some(exit_key) = settings_io
+            .get_profile_hotkey("exit")
+            .and_then(|k| key_name_to_vk_code(&k))
+    {
+        hotkey_handler.set_exit_key(exit_key);
+    }
+    if
+        let Some(toggle_key) = settings_io
+            .get_profile_hotkey("toggle")
+            .and_then(|k| key_name_to_vk_code(&k))
+    {
+        hotkey_handler.set_toggle_key(toggle_key);
+    }
+    if
+        let Some(hide_key) = settings_io
+            .get_profile_hotkey("hide")
+            .and_then(|k| key_name_to_vk_code(&k))
+    {
+        hotkey_handler.set_hide_key(hide_key);
+    }
+
+    // Load weapon hotkeys
+    for (weapon, key_name) in settings_io.get_all_weapon_hotkeys() {
+        if let Some(key_code) = key_name_to_vk_code(&key_name) {
+            hotkey_handler.bind_weapon(key_code, weapon);
+        }
+    }
+
+    // --- Application State ---
+    let mut rcs_enabled = true;
+    let mut window_visible = true;
+
+    // UI state variables to replace unsafe static
+    let mut capturing_exit = false;
+    let mut capturing_toggle = false;
+    let mut capturing_hide = false;
+    let mut capturing_hotkey = false;
+    let mut capturing_rebind = false;
+    let mut rebinding_weapon: Option<String> = None;
+
     // --- ImGui Main Loop ---
     let mut xmod_state = XmodState { x_flip: 1, x_once_done: false };
     let mut prev_weapon: Option<String> = None;
     let mut prev_acog = false;
-    
-    support::simple_init_with_resize(file!(), move |_should_run, ui, set_window_size| {
+
+    support::simple_init_with_resize(file!(), move |should_run, ui, set_window_size| {
+        // Check if window is focused to reduce GPU usage when minimized/unfocused
+        let window_focused = ui.io().want_capture_keyboard || ui.io().want_capture_mouse;
+
+        // Reduce update frequency when not focused
+        if !window_focused {
+            std::thread::sleep(std::time::Duration::from_millis(67));
+        }
+
         let window_flags =
             WindowFlags::NO_RESIZE |
             WindowFlags::NO_BRING_TO_FRONT_ON_FOCUS |
@@ -84,48 +141,130 @@ fn main() {
 
         let size = [600.0, 420.0];
         set_window_size(size);
+
+        // Check hotkeys
+        hotkey_handler.check_hotkeys();
+
+        // Handle hotkey commands
+        while let Ok(cmd) = hotkey_rx.try_recv() {
+            match cmd {
+                HotkeyCommand::Exit => {
+                    *should_run = false;
+                }
+                HotkeyCommand::ToggleRcs => {
+                    rcs_enabled = !rcs_enabled;
+                    if !rcs_enabled {
+                        control.reset();
+                        println!("RCS toggled: OFF");
+                    } else {
+                        // Re-enable with current weapon if selected
+                        if let Some(weapon) = &selected_weapon {
+                            let (x, y, xmod_val) = settings_io.get_weapon_values(
+                                weapon,
+                                acog_enabled
+                            );
+                            let rpm = weapon_rpm.get(weapon).copied().unwrap_or(600) as f32;
+                            let timing = (4234.44 / rpm + 2.58).round() as i32;
+                            control.update(x as i32, y as i32, timing, xmod_val);
+                        }
+                        println!("RCS toggled: ON");
+                    }
+                }
+                HotkeyCommand::HideToggle => {
+                    window_visible = !window_visible;
+                    println!("Window visibility toggled: {}", if window_visible {
+                        "VISIBLE"
+                    } else {
+                        "HIDDEN"
+                    });
+                }
+                HotkeyCommand::SelectWeapon(weapon_name) => {
+                    if rcs_enabled && all_weapons.contains(&weapon_name) {
+                        selected_weapon = Some(weapon_name.clone());
+                        println!("Weapon selected via hotkey: {}", weapon_name);
+                    }
+                }
+            }
+        }
+
+        // Handle scheduled mouse commands on the main thread
+        while let Ok(cmd) = rx.try_recv() {
+            match cmd {
+                MouseCommand::Move(mut x, y) => {
+                    // Only run Xmod logic and move mouse if a weapon is selected AND RCS is enabled
+                    if rcs_enabled {
+                        if let Some(selected) = selected_weapon.as_ref() {
+                            // Get xmod value directly from settings_io instead of HashMap
+                            let (_, _, xmod_val) = settings_io.get_weapon_values(
+                                selected,
+                                acog_enabled
+                            );
+                            match xmod_val as i32 {
+                                -1 => {
+                                    x *= xmod_state.x_flip;
+                                    xmod_state.x_flip *= -1;
+                                }
+                                0 => {
+                                    if xmod_state.x_once_done {
+                                        x = 0;
+                                    } else {
+                                        xmod_state.x_once_done = true;
+                                    }
+                                }
+                                1 => {
+                                    // No change
+                                }
+                                _ => {
+                                    x = ((x as f32) * xmod_val) as i32;
+                                }
+                            }
+                            mouse_input.lock().unwrap().move_relative(x, y);
+                        }
+                    }
+                }
+                MouseCommand::Click(b) => mouse_input.lock().unwrap().click(b),
+                MouseCommand::Down(b) => mouse_input.lock().unwrap().down(b),
+                MouseCommand::Up(b) => mouse_input.lock().unwrap().up(b),
+            }
+        }
+
+        if !window_visible {
+            return;
+        }
+
         ui.window("RCS Config")
             .size(size, Condition::Always)
             .position([0.0, 0.0], Condition::Always)
             .flags(window_flags)
             .build(|| {
-                while let Ok(cmd) = rx.try_recv() {
-                    match cmd {
-                        MouseCommand::Move(mut x, y) => {
-                            if let Some(selected) = selected_weapon.as_ref() {
-                                let (_, _, xmod_val) = settings_io.get_weapon_values(selected, acog_enabled);
-                                match xmod_val as i32 {
-                                    -1 => {
-                                        x *= xmod_state.x_flip;
-                                        xmod_state.x_flip *= -1;
-                                    }
-                                    0 => {
-                                        if xmod_state.x_once_done {
-                                            x = 0;
-                                        } else {
-                                            xmod_state.x_once_done = true;
-                                        }
-                                    }
-                                    1 => {
-                                    }
-                                    _ => {
-                                        x = ((x as f32) * xmod_val) as i32;
-                                    }
-                                }
-                                mouse_input.lock().unwrap().move_relative(x, y);
-                            } else {
-
-                            }
-                        }
-                        MouseCommand::Click(b) => mouse_input.lock().unwrap().click(b),
-                        MouseCommand::Down(b) => mouse_input.lock().unwrap().down(b),
-                        MouseCommand::Up(b) => mouse_input.lock().unwrap().up(b),
-                    }
-                }
-
                 if let Some(_tab_bar_token) = ui.tab_bar("main_tabs") {
                     // --- Recoil Control Tab ---
                     if let Some(_tab_item_token) = ui.tab_item("Recoil Control") {
+                        // RCS Status Indicator and Toggle Button
+                        if rcs_enabled {
+                            ui.text_colored([0.0, 1.0, 0.0, 1.0], "RCS: ENABLED");
+                        } else {
+                            ui.text_colored([1.0, 0.0, 0.0, 1.0], "RCS: DISABLED");
+                        }
+                        ui.same_line();
+                        if ui.button(if rcs_enabled { "Disable RCS" } else { "Enable RCS" }) {
+                            rcs_enabled = !rcs_enabled;
+                            if !rcs_enabled {
+                                control.reset();
+                            } else {
+                                // Re-enable with current weapon if selected
+                                if let Some(weapon) = &selected_weapon {
+                                    let (x, y, xmod_val) = settings_io.get_weapon_values(
+                                        weapon,
+                                        acog_enabled
+                                    );
+                                    let rpm = weapon_rpm.get(weapon).copied().unwrap_or(600) as f32;
+                                    let timing = (4234.44 / rpm + 2.58).round() as i32;
+                                    control.update(x as i32, y as i32, timing, xmod_val);
+                                }
+                            }
+                        }
+
                         let acog_label = String::from("ACOG");
                         ui.checkbox(&acog_label, &mut acog_enabled);
                         ui.same_line();
@@ -187,10 +326,12 @@ fn main() {
                                 prev_weapon = Some(weapon.clone());
                                 prev_acog = acog_enabled;
 
-                                let rpm = weapon_rpm.get(weapon).copied().unwrap_or(600) as f32;
-                                let timing = (4234.44 / rpm + 2.58).round() as i32;
-                                control.update(x as i32, y as i32, timing, xmod_val);
-                                let _ = control.current(true);
+                                if rcs_enabled {
+                                    let rpm = weapon_rpm.get(weapon).copied().unwrap_or(600) as f32;
+                                    let timing = (4234.44 / rpm + 2.58).round() as i32;
+                                    control.update(x as i32, y as i32, timing, xmod_val);
+                                    let _ = control.current(true);
+                                }
                             }
 
                             // Use settings_io to load values
@@ -218,10 +359,12 @@ fn main() {
                                     xmod_val,
                                     acog_enabled
                                 );
-                                let rpm = weapon_rpm.get(weapon).copied().unwrap_or(600) as f32;
-                                let timing = (4234.44 / rpm + 2.58).round() as i32;
-                                control.update(x as i32, y as i32, timing, xmod_val);
-                                let _ = control.current(true);
+                                if rcs_enabled {
+                                    let rpm = weapon_rpm.get(weapon).copied().unwrap_or(600) as f32;
+                                    let timing = (4234.44 / rpm + 2.58).round() as i32;
+                                    control.update(x as i32, y as i32, timing, xmod_val);
+                                    let _ = control.current(true);
+                                }
                             }
                         }
 
@@ -285,9 +428,7 @@ fn main() {
                     // --- Hotkeys Tab ---
                     if let Some(_tab_item_token) = ui.tab_item("Hotkeys") {
                         // Exit Button Hotkey
-                        ui.text("Exit Button Hotkey:");
-                        static mut CAPTURING_EXIT: bool = false;
-                        let mut capturing_exit = unsafe { CAPTURING_EXIT };
+                        ui.text("Exit Hotkey:");
                         if ui.button(&format!("Current: {}", exit_hotkey)) {
                             capturing_exit = true;
                         }
@@ -308,17 +449,153 @@ fn main() {
                                         .to_string();
                                 }
                                 settings_io.save_profile_hotkey("exit", &exit_hotkey);
+                                if let Some(key_code) = key_name_to_vk_code(&exit_hotkey) {
+                                    hotkey_handler.set_exit_key(key_code);
+                                }
                                 capturing_exit = false;
                             }
                         }
-                        unsafe {
-                            CAPTURING_EXIT = capturing_exit;
+
+                        // Toggle RCS Hotkey
+                        let mut toggle_hotkey = settings_io
+                            .get_profile_hotkey("toggle")
+                            .unwrap_or_else(|| "F1".to_string());
+                        ui.text("Toggle RCS Hotkey:");
+                        if ui.button(&format!("Current: {}", toggle_hotkey)) {
+                            capturing_toggle = true;
+                        }
+                        if capturing_toggle {
+                            ui.text("Press a key (ESC to clear)...");
+                            if
+                                let Some((imgui_key, _)) = ui
+                                    .io()
+                                    .keys_down.iter()
+                                    .enumerate()
+                                    .find(|&(_, &down)| down)
+                            {
+                                if imgui_key == (imgui::Key::Escape as usize) {
+                                    toggle_hotkey = "None".to_string();
+                                } else {
+                                    toggle_hotkey = modules::ui::keybinds
+                                        ::imgui_key_to_name(imgui_key as u32)
+                                        .to_string();
+                                }
+                                settings_io.save_profile_hotkey("toggle", &toggle_hotkey);
+                                if let Some(key_code) = key_name_to_vk_code(&toggle_hotkey) {
+                                    hotkey_handler.set_toggle_key(key_code);
+                                }
+                                capturing_toggle = false;
+                            }
                         }
 
-                        // Add Hotkey Binding
-                        if ui.button("+ Add Hotkey Binding") {
+                        // Hide Window Hotkey
+                        let mut hide_hotkey = settings_io
+                            .get_profile_hotkey("hide")
+                            .unwrap_or_else(|| "F2".to_string());
+                        ui.text("Hide Window Hotkey:");
+                        if ui.button(&format!("Current: {}", hide_hotkey)) {
+                            capturing_hide = true;
+                        }
+                        if capturing_hide {
+                            ui.text("Press a key (ESC to clear)...");
+                            if
+                                let Some((imgui_key, _)) = ui
+                                    .io()
+                                    .keys_down.iter()
+                                    .enumerate()
+                                    .find(|&(_, &down)| down)
+                            {
+                                if imgui_key == (imgui::Key::Escape as usize) {
+                                    hide_hotkey = "None".to_string();
+                                } else {
+                                    hide_hotkey = modules::ui::keybinds
+                                        ::imgui_key_to_name(imgui_key as u32)
+                                        .to_string();
+                                }
+                                settings_io.save_profile_hotkey("hide", &hide_hotkey);
+                                if let Some(key_code) = key_name_to_vk_code(&hide_hotkey) {
+                                    hotkey_handler.set_hide_key(key_code);
+                                }
+                                capturing_hide = false;
+                            }
+                        }
+
+                        ui.separator();
+
+                        // --- Weapon Hotkeys ---
+                        ui.text("Weapon Hotkeys:");
+                        let weapon_hotkeys = settings_io.get_all_weapon_hotkeys();
+                        let mut weapons_to_remove = Vec::new();
+                        let mut weapons_to_rebind = Vec::new();
+
+                        for (weapon, key) in &weapon_hotkeys {
+                            ui.text(format!("{}: {}", weapon, key));
+                            ui.same_line();
+                            if ui.button(&format!("Rebind##{}", weapon)) {
+                                weapons_to_rebind.push(weapon.clone());
+                            }
+                            ui.same_line();
+                            if ui.button(&format!("Remove##{}", weapon)) {
+                                weapons_to_remove.push(weapon.clone());
+                            }
+                        }
+
+                        // Handle rebinding
+                        for weapon in weapons_to_rebind {
+                            rebinding_weapon = Some(weapon);
+                            capturing_rebind = true;
+                            break;
+                        }
+
+                        if capturing_rebind {
+                            if let Some(ref weapon) = rebinding_weapon {
+                                ui.text(
+                                    &format!("Rebinding {}: Press a key (ESC to cancel)...", weapon)
+                                );
+                                if
+                                    let Some((imgui_key, _)) = ui
+                                        .io()
+                                        .keys_down.iter()
+                                        .enumerate()
+                                        .find(|&(_, &down)| down)
+                                {
+                                    if imgui_key == (imgui::Key::Escape as usize) {
+                                        capturing_rebind = false;
+                                        rebinding_weapon = None;
+                                    } else {
+                                        let new_key = modules::ui::keybinds
+                                            ::imgui_key_to_name(imgui_key as u32)
+                                            .to_string();
+                                        settings_io.save_profile_hotkey(weapon, &new_key);
+                                        if let Some(key_code) = key_name_to_vk_code(&new_key) {
+                                            hotkey_handler.bind_weapon(key_code, weapon.clone());
+                                        }
+                                        capturing_rebind = false;
+                                        rebinding_weapon = None;
+                                    }
+                                }
+                            }
+                        }
+
+                        // Remove weapons outside the iteration to avoid borrowing issues
+                        for weapon in weapons_to_remove {
+                            if
+                                let Some((_, key)) = weapon_hotkeys
+                                    .iter()
+                                    .find(|(w, _)| w == &weapon)
+                            {
+                                settings_io.remove_weapon_hotkey(&weapon);
+                                if let Some(key_code) = key_name_to_vk_code(key) {
+                                    hotkey_handler.unbind_weapon(key_code);
+                                }
+                            }
+                        }
+
+                        // Add weapon hotkey button at the bottom
+                        if ui.button("+") {
                             hotkey_add_popup = true;
                         }
+
                         if hotkey_add_popup {
                             ui.open_popup("AddHotkeyPopup");
                         }
@@ -342,8 +619,6 @@ fn main() {
                                 }
                             }
 
-                            static mut CAPTURING_HOTKEY: bool = false;
-                            let mut capturing_hotkey = unsafe { CAPTURING_HOTKEY };
                             if ui.button("Capture Key") {
                                 capturing_hotkey = true;
                             }
@@ -362,13 +637,14 @@ fn main() {
                                     capturing_hotkey = false;
                                 }
                             }
-                            unsafe {
-                                CAPTURING_HOTKEY = capturing_hotkey;
-                            }
+
                             ui.input_text("Key", &mut hotkey_key).build();
                             if ui.button("Bind") {
                                 if !hotkey_weapon.is_empty() && !hotkey_key.is_empty() {
                                     settings_io.save_profile_hotkey(&hotkey_weapon, &hotkey_key);
+                                    if let Some(key_code) = key_name_to_vk_code(&hotkey_key) {
+                                        hotkey_handler.bind_weapon(key_code, hotkey_weapon.clone());
+                                    }
                                     hotkey_bindings.insert(
                                         hotkey_key.clone(),
                                         hotkey_weapon.clone()
@@ -381,12 +657,6 @@ fn main() {
                                 hotkey_add_popup = false;
                                 ui.close_current_popup();
                             }
-                        }
-                        // List current hotkey bindings
-                        ui.separator();
-                        ui.text("Current Hotkey Bindings:");
-                        for (key, weapon) in &hotkey_bindings {
-                            ui.text(format!("{} -> {}", key, weapon));
                         }
                     }
 
@@ -416,13 +686,6 @@ fn main() {
                             );
                             mouse_method = method;
                         }
-                        // // Test buttons for mouse input
-                        // if ui.button("Test Click") {
-                        //     mouse_input.lock().unwrap().click(1);
-                        // }
-                        // if ui.button("Move Right") {
-                        //     mouse_input.lock().unwrap().move_relative(100, 0);
-                        // }
                     }
 
                     // --- Settings Tab ---

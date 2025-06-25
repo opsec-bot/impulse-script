@@ -1,5 +1,5 @@
 ---
-applyTo: '**'
+applyTo: '**/*.rs'
 ---
 
 # Rust Programming Copilot Instructions

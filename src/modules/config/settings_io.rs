@@ -143,4 +143,22 @@ impl SettingsIO {
         self.settings.update("RCS_HOTKEY", hotkey_name, value);
         self.settings.write();
     }
+
+    pub fn get_all_weapon_hotkeys(&self) -> Vec<(String, String)> {
+        let mut weapon_hotkeys = Vec::new();
+        // Get all weapons and check if they have hotkeys
+        for weapon in self.get_all_wep() {
+            if let Some(hotkey) = self.settings.get("RCS_HOTKEY", &weapon) {
+                if !hotkey.is_empty() {
+                    weapon_hotkeys.push((weapon, hotkey));
+                }
+            }
+        }
+        weapon_hotkeys
+    }
+    pub fn remove_weapon_hotkey(&mut self, weapon_name: &str) {
+        // Set empty value to effectively remove the hotkey
+        self.settings.update("RCS_HOTKEY", weapon_name, "");
+        self.settings.write();
+    }
 }
