@@ -52,11 +52,6 @@ impl ProcessGhost {
         0
     }
 
-    // /// Set the window handle to manage
-    // pub fn set_window_handle(&mut self, hwnd: HWND) {
-    //     self.window_handle = Some(hwnd);
-    // }
-
     pub fn find_and_set_window_handle(&mut self, window_title: &str) -> Result<(), String> {
         #[cfg(windows)]
         unsafe {
@@ -243,38 +238,6 @@ impl ProcessGhost {
         #[cfg(not(windows))]
         Err("Windows API not available on this platform".to_string())
     }
-
-    // /// Toggle Ghost mode (hide from Alt+Tab and screen capture)
-    // pub fn toggle_ghost_mode(&mut self) -> Result<bool, String> {
-    //     if self.is_hidden_from_alt_tab {
-    //         self.show_in_alt_tab()?;
-    //         self.show_in_screen_capture()?;
-    //         Ok(false) // Not hidden
-    //     } else {
-    //         self.hide_from_alt_tab()?;
-    //         self.hide_from_screen_capture()?;
-    //         Ok(true) // Hidden
-    //     }
-    // }
-
-    // /// Get current Ghost status
-    // pub fn is_ghost_active(&self) -> bool {
-    //     self.is_hidden_from_alt_tab && self.is_hidden_from_capture
-    // }
-
-    // /// Check if currently hidden from Alt+Tab
-    // pub fn is_hidden_from_alt_tab(&self) -> bool {
-    //     self.is_hidden_from_alt_tab
-    // }
-
-    // /// Check if currently hidden from screen capture
-    // pub fn is_hidden_from_capture(&self) -> bool {
-    //     self.is_hidden_from_capture
-    // }
-
-    // pub fn is_hidden_from_task_manager(&self) -> bool {
-    //     self.is_hidden_from_task_manager
-    // }
 }
 
 impl Default for ProcessGhost {

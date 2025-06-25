@@ -2,7 +2,7 @@ use libloading::Library;
 use std::{ ffi::c_int, path::PathBuf, thread::sleep, time::Duration };
 
 pub struct InputMethodGFCK {
-    _dll: Library, // Keep alive
+    _dll: Library,
     mouse_move: unsafe extern "C" fn(c_int, c_int, c_int, c_int),
 }
 

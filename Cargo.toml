@@ -24,5 +24,9 @@ features = [
     "processthreadsapi",
     "handleapi",
     "tlhelp32",
-    "winnt","libloaderapi","memoryapi"
+    "winnt",
+    "wincon",
+    "memoryapi",
+    "libloaderapi",
+    "consoleapi"
 ]

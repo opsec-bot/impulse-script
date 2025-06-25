@@ -1,3 +1,4 @@
+#![windows_subsystem = "windows"] // Comment this line to see console output
 mod modules;
 
 use imgui::*;

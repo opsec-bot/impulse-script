@@ -2,7 +2,7 @@ use libloading::Library;
 use std::{ ffi::c_int, path::PathBuf, thread::sleep, time::Duration };
 
 pub struct InputMethodGhubMouse {
-    _dll: Library, // Keep alive
+    _dll: Library,
     press: unsafe extern "C" fn(c_int) -> c_int,
     release: unsafe extern "C" fn() -> c_int,
     move_r: unsafe extern "C" fn(c_int, c_int) -> c_int,
