@@ -481,10 +481,14 @@ fn main() {
                     // --- Hotkeys Tab ---
                     if let Some(_tab_item_token) = ui.tab_item("Hotkeys") {
                         ui.text("Exit Hotkey:");
+
+                        ui.same_line();
                         if ui.button(&format!("Current: {}", exit_hotkey)) {
                             capturing_exit = true;
                         }
+
                         if capturing_exit {
+                            ui.same_line();
                             ui.text("Press a key (ESC to clear)...");
                             if
                                 let Some((imgui_key, _)) = ui
@@ -511,11 +515,16 @@ fn main() {
                         let mut toggle_hotkey = settings_io
                             .get_profile_hotkey("toggle")
                             .unwrap_or_else(|| "F1".to_string());
+
                         ui.text("Toggle RCS Hotkey:");
+
+                        ui.same_line();
                         if ui.button(&format!("Current: {}", toggle_hotkey)) {
                             capturing_toggle = true;
                         }
+
                         if capturing_toggle {
+                            ui.same_line();
                             ui.text("Press a key (ESC to clear)...");
                             if
                                 let Some((imgui_key, _)) = ui
@@ -542,11 +551,16 @@ fn main() {
                         let mut hide_hotkey = settings_io
                             .get_profile_hotkey("hide")
                             .unwrap_or_else(|| "F2".to_string());
+
                         ui.text("Ghost Mode Hotkey:");
+
+                        ui.same_line();
                         if ui.button(&format!("Current: {}", hide_hotkey)) {
                             capturing_hide = true;
                         }
+
                         if capturing_hide {
+                            ui.same_line();
                             ui.text("Press a key (ESC to clear)...");
                             if
                                 let Some((imgui_key, _)) = ui
