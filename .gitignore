@@ -16,5 +16,3 @@ Thumbs.db
 # Config files (if they contain sensitive data)
 config.ini
 
-# DLL files (if they're not meant to be in repo)
-lib/*.dll

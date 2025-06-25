@@ -30,3 +30,10 @@ features = [
     "libloaderapi",
     "consoleapi"
 ]
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+opt-level = "z"
