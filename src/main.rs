@@ -17,6 +17,55 @@ use modules::core::{
 use std::collections::{ HashMap };
 use std::sync::{ Arc, Mutex, mpsc::{ Sender, Receiver, channel } };
 
+fn calculate_recoil_adjustment(old_sensitivity: i32, new_sensitivity: i32, movement: f32) -> f32 {
+    if new_sensitivity == 0 {
+        return movement;
+    }
+
+    // Calculate the constant factor (equivalent to k = sensitivity * movement)
+    let constant_factor = (old_sensitivity as f32) * movement;
+
+    // Calculate new movement using linear interpolation
+    constant_factor / (new_sensitivity as f32)
+}
+
+/// Updates all weapon recoil values based on sensitivity change
+fn update_all_weapon_recoil_for_sensitivity(
+    settings_io: &mut SettingsIO,
+    old_sensitivity: i32,
+    new_sensitivity: i32,
+    all_weapons: &[String]
+) {
+    if old_sensitivity == new_sensitivity || old_sensitivity == 0 {
+        return;
+    }
+
+    for weapon in all_weapons {
+        // Update normal values
+        let (x, y, xmod) = settings_io.get_weapon_values(weapon, false);
+        let new_x = calculate_recoil_adjustment(old_sensitivity, new_sensitivity, x);
+        let new_y = calculate_recoil_adjustment(old_sensitivity, new_sensitivity, y);
+
+        settings_io.save_weapon_values(weapon, new_x, new_y, xmod, false);
+
+        // Update ACOG values if they exist
+        let (x_acog, y_acog, xmod_acog) = settings_io.get_weapon_values(weapon, true);
+        if x_acog != 0.0 || y_acog != 1.0 {
+            // Check if ACOG values are non-default
+            let new_x_acog = calculate_recoil_adjustment(old_sensitivity, new_sensitivity, x_acog);
+            let new_y_acog = calculate_recoil_adjustment(old_sensitivity, new_sensitivity, y_acog);
+
+            settings_io.save_weapon_values(weapon, new_x_acog, new_y_acog, xmod_acog, true);
+        }
+    }
+
+    println!(
+        "Updated all weapon recoil values for sensitivity change: {} -> {}",
+        old_sensitivity,
+        new_sensitivity
+    );
+}
+
 fn main() {
     // --- State Initialization ---
     let mut setup = Setup::new(false);
@@ -67,10 +116,9 @@ fn main() {
     // --- Settings State ---
     let mut fov = setup.get_fov() as i32;
     let mut sens = setup.get_sensitivity() as i32;
+    let mut previous_sensitivity = sens;
     let mut sens_1x = setup.get_sensitivity_modifier_1() as i32;
     let mut sens_25x = setup.get_sensitivity_modifier_25() as i32;
-
-    // --- Mouse Command Channel ---
     let (tx, rx): (Sender<MouseCommand>, Receiver<MouseCommand>) = channel();
 
     // --- Hotkey Command Channel ---
@@ -696,32 +744,91 @@ fn main() {
                     // --- Settings Tab ---
                     if let Some(_tab_item_token) = ui.tab_item("Settings") {
                         if ui.button("Auto-import from GameSettings.ini") {
+                            let old_sens = sens; // Store current sensitivity before importing
+
                             setup.get_mouse_sensitivity_settings();
                             fov = setup.get_fov() as i32;
                             sens = setup.get_sensitivity() as i32;
                             sens_1x = setup.get_sensitivity_modifier_1() as i32;
                             sens_25x = setup.get_sensitivity_modifier_25() as i32;
+
                             settings_io.settings.update("GAME", "fov", fov);
                             settings_io.settings.update("GAME", "sens", sens);
                             settings_io.settings.update("GAME", "sens_1x", sens_1x);
                             settings_io.settings.update("GAME", "sens_25x", sens_25x);
+
+                            // Auto-adjust weapon values if sensitivity changed during import
+                            if old_sens != sens && old_sens != 0 {
+                                update_all_weapon_recoil_for_sensitivity(
+                                    &mut settings_io,
+                                    old_sens,
+                                    sens,
+                                    &all_weapons
+                                );
+
+                                // Update the current weapon if RCS is enabled
+                                if rcs_enabled {
+                                    if let Some(weapon) = &selected_weapon {
+                                        let (x, y, xmod_val) = settings_io.get_weapon_values(
+                                            weapon,
+                                            acog_enabled
+                                        );
+                                        let rpm = weapon_rpm
+                                            .get(weapon)
+                                            .copied()
+                                            .unwrap_or(600) as f32;
+                                        let timing = (4234.44 / rpm + 2.58).round() as i32;
+                                        control.update(x as i32, y as i32, timing, xmod_val);
+                                    }
+                                }
+                            }
+
+                            previous_sensitivity = sens; // Update after adjustment
                         }
+
                         ui.separator();
+
                         if ui.input_int("DPI", &mut dpi).build() {
                             settings_io.set_dpi(dpi);
                         }
+
                         if ui.slider_config("FOV", 60, 90).build(&mut fov) {
                             settings_io.settings.update("GAME", "fov", fov);
                             settings_io.settings.write();
                         }
+
                         if ui.slider_config("Sensitivity", 1, 100).build(&mut sens) {
+                            // Auto-adjust weapon recoil values when sensitivity changes
+                            update_all_weapon_recoil_for_sensitivity(
+                                &mut settings_io,
+                                previous_sensitivity,
+                                sens,
+                                &all_weapons
+                            );
+
+                            // Update the current weapon if RCS is enabled
+                            if rcs_enabled {
+                                if let Some(weapon) = &selected_weapon {
+                                    let (x, y, xmod_val) = settings_io.get_weapon_values(
+                                        weapon,
+                                        acog_enabled
+                                    );
+                                    let rpm = weapon_rpm.get(weapon).copied().unwrap_or(600) as f32;
+                                    let timing = (4234.44 / rpm + 2.58).round() as i32;
+                                    control.update(x as i32, y as i32, timing, xmod_val);
+                                }
+                            }
+
+                            previous_sensitivity = sens;
                             settings_io.settings.update("GAME", "sens", sens);
                             settings_io.settings.write();
                         }
+
                         if ui.slider_config("1x Sensitivity", 1, 100).build(&mut sens_1x) {
                             settings_io.settings.update("GAME", "sens_1x", sens_1x);
                             settings_io.settings.write();
                         }
+
                         if ui.slider_config("2.5x Sensitivity", 1, 100).build(&mut sens_25x) {
                             settings_io.settings.update("GAME", "sens_25x", sens_25x);
                             settings_io.settings.write();
