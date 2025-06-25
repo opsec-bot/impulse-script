@@ -73,7 +73,7 @@ pub fn imgui_key_to_name(imgui_key: u32) -> &'static str {
         581 => "F10",
         582 => "F11",
         583 => "F12",
-        // ... add more as needed from your text file ...
+        // ... add more as needed
         _ => "Unknown",
     }
 }

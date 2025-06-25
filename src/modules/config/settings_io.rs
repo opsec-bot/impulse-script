@@ -10,7 +10,6 @@ impl SettingsIO {
         let config_path = "./config.ini";
         let mut settings = Settings::new(config_path);
         if !std::path::Path::new(config_path).exists() {
-            // Import game settings
             let mut setup = Setup::new(false);
             setup.get_mouse_sensitivity_settings();
             settings.update("GAME", "fov", setup.get_fov());
@@ -160,13 +159,13 @@ impl SettingsIO {
             .sections()
             .into_iter()
             .filter(|section| {
-                // Lowercase for case-insensitive comparison
+
                 let s = section.to_ascii_lowercase();
-                // Exclude known config sections
+
                 if s == "game" || s == "mouse" || s == "rcs_hotkey" {
                     return false;
                 }
-                // Only include if it has weapon keys (rpm, x, y, xmod)
+
                 let has_rpm = self.settings.get(section, "rpm").is_some();
                 let has_x = self.settings.get(section, "x").is_some();
                 let has_y = self.settings.get(section, "y").is_some();

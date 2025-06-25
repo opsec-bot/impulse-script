@@ -51,17 +51,16 @@ impl Setup {
     }
 
     fn get_game_settings_file(user_document_folder: &Path) -> Option<PathBuf> {
-        // Use \\ for Windows or / for cross-platform, glob crate supports /
         let r6_path = user_document_folder.join("My Games").join("Rainbow Six - Siege");
         let pattern = r6_path.join("*").join("GameSettings.ini");
-        let pattern_str = pattern.to_string_lossy().replace("\\", "/"); // glob expects /
+        let pattern_str = pattern.to_string_lossy().replace("\\", "/");
         let mut ini_files: Vec<_> = glob(&pattern_str)
             .unwrap()
             .filter_map(Result::ok)
             .filter(|p| p.exists())
             .collect();
 
-        // Sort by modification time, newest last
+
         ini_files.sort_by_key(|p| {
             std::fs
                 ::metadata(p)

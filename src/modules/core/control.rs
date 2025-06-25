@@ -88,16 +88,9 @@ impl Control {
         s.move_x_modifier = 1.0;
     }
 
-    /// Call this when a weapon/hotkey is selected to set the current recoil profile.
     pub fn update(&mut self, x: i32, y: i32, t: i32, x_mod: f32) {
         self.reset();
         let mut s = self.state.lock().unwrap();
-        // X = Horizontal Amount (>0 right, <0 left)
-        // Y = Vertical Amount (use calculator)
-        // Xmod = Modifier applied to X every iteration:
-        //   -1: Flips X direction each iteration
-        //    0: Moves horizontal once, then stops
-        //    1: No modification (X stays the same)
         s.move_x = x;
         s.move_y = y;
         s.timing = (t as f32) / 1000.0;

@@ -37,7 +37,6 @@ fn main() {
         }
     }
 
-    // Remove unused variables
     let mut selected_weapon: Option<String> = None;
     let mut acog_enabled = false;
 
@@ -91,13 +90,10 @@ fn main() {
             .position([0.0, 0.0], Condition::Always)
             .flags(window_flags)
             .build(|| {
-                // Handle scheduled mouse commands on the main thread
                 while let Ok(cmd) = rx.try_recv() {
                     match cmd {
                         MouseCommand::Move(mut x, y) => {
-                            // Only run Xmod logic and move mouse if a weapon is selected
                             if let Some(selected) = selected_weapon.as_ref() {
-                                // Get xmod value directly from settings_io instead of HashMap
                                 let (_, _, xmod_val) = settings_io.get_weapon_values(selected, acog_enabled);
                                 match xmod_val as i32 {
                                     -1 => {
@@ -112,7 +108,6 @@ fn main() {
                                         }
                                     }
                                     1 => {
-                                        // No change
                                     }
                                     _ => {
                                         x = ((x as f32) * xmod_val) as i32;
@@ -120,8 +115,7 @@ fn main() {
                                 }
                                 mouse_input.lock().unwrap().move_relative(x, y);
                             } else {
-                                // No weapon selected: do not move mouse!
-                                // Optionally, log or ignore
+
                             }
                         }
                         MouseCommand::Click(b) => mouse_input.lock().unwrap().click(b),
@@ -348,7 +342,7 @@ fn main() {
                                     }
                                 }
                             }
-                            // Key capture for hotkey
+
                             static mut CAPTURING_HOTKEY: bool = false;
                             let mut capturing_hotkey = unsafe { CAPTURING_HOTKEY };
                             if ui.button("Capture Key") {
