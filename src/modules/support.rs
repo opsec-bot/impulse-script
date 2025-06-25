@@ -17,11 +17,6 @@ pub fn simple_init<F: FnMut(&mut bool, &mut Ui) + 'static>(title: &str, run_ui: 
     init_with_startup(title, |_, _, _| {}, run_ui);
 }
 
-#[allow(dead_code)]
-fn main() {
-    simple_init("ImGui Example", |_, _| {});
-}
-
 pub fn init_with_startup<FInit, FUi>(title: &str, mut startup: FInit, mut run_ui: FUi)
     where
         FInit: FnMut(&mut Context, &mut Renderer, &Display<WindowSurface>) + 'static,

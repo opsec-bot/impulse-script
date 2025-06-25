@@ -1,9 +1,9 @@
-use libloading::{ Library, Symbol };
+use libloading::Library;
 use std::{ ffi::c_int, path::PathBuf, thread::sleep, time::Duration };
 
 pub struct InputMethodGFCK {
     _dll: Library, // Keep alive
-    mouse_move: Symbol<'static, unsafe extern "C" fn(c_int, c_int, c_int, c_int)>,
+    mouse_move: unsafe extern "C" fn(c_int, c_int, c_int, c_int),
 }
 
 impl InputMethodGFCK {
@@ -13,13 +13,11 @@ impl InputMethodGFCK {
         }
         unsafe {
             let dll = Library::new(dll_path)?;
-            let mouse_move: Symbol<unsafe extern "C" fn(c_int, c_int, c_int, c_int)> = dll.get::<
-                unsafe extern "C" fn(c_int, c_int, c_int, c_int)
-            >(b"mouse_move")?;
-            let mouse_move = std::mem::transmute::<
-                Symbol<unsafe extern "C" fn(c_int, c_int, c_int, c_int)>,
-                Symbol<'static, unsafe extern "C" fn(c_int, c_int, c_int, c_int)>
-            >(mouse_move);
+            let mouse_move_symbol = dll.get::<unsafe extern "C" fn(c_int, c_int, c_int, c_int)>(
+                b"mouse_move"
+            )?;
+            let mouse_move = *mouse_move_symbol;
+
             Ok(Self {
                 _dll: dll,
                 mouse_move,

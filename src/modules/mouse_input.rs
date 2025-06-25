@@ -10,15 +10,13 @@ pub enum InputMethodEnum {
 }
 
 #[allow(dead_code)]
-pub struct MouseInput<'a> {
+pub struct MouseInput {
     gfck: InputMethodGFCK,
-    ghub: InputMethodGhubMouse<'a>,
+    ghub: InputMethodGhubMouse,
     current: InputMethodEnum,
-    gfck_path: PathBuf,
-    ghub_path: PathBuf,
 }
 
-impl<'a> MouseInput<'a> {
+impl<'a> MouseInput {
     pub unsafe fn new(
         gfck_dll: PathBuf,
         ghub_dll: PathBuf
@@ -31,14 +29,12 @@ impl<'a> MouseInput<'a> {
         }
         Ok(Self {
             gfck: unsafe {
-                InputMethodGFCK::new(gfck_dll.clone())?
+                InputMethodGFCK::new(gfck_dll)?
             },
             ghub: unsafe {
-                InputMethodGhubMouse::new(ghub_dll.clone())?
+                InputMethodGhubMouse::new(ghub_dll)?
             },
             current: InputMethodEnum::GFCK,
-            gfck_path: gfck_dll,
-            ghub_path: ghub_dll,
         })
     }
 

@@ -30,7 +30,6 @@ fn main() {
 
     // --- Weapon/Hotkey State ---
     let mut weapon_classes: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    let mut weapon_to_class: HashMap<String, String> = HashMap::new();
     let mut all_weapons = settings_io.get_all_wep();
     all_weapons.sort();
     let mut weapon_rpm: HashMap<String, i32> = HashMap::new();
@@ -41,9 +40,9 @@ fn main() {
         }
     }
 
-    let mut weapon_xy: HashMap<String, (f32, f32)> = HashMap::new();
     let weapon_xmod: HashMap<String, f32> = HashMap::new();
     let weapon_xmod_acog: HashMap<String, f32> = HashMap::new();
+    let mut weapon_to_class: HashMap<String, String> = HashMap::new();
     let mut selected_weapon: Option<String> = None;
     let mut acog_enabled = false;
 
@@ -61,7 +60,7 @@ fn main() {
         .unwrap_or_else(|| "None".to_string());
     let mut mouse_method = match settings_io.settings.get("MOUSE", "method").as_deref() {
         Some("GhubMouse") => 1,
-        _ => 0, // Default to GFCK
+        _ => 0,
     };
 
     // --- Settings State ---
@@ -75,37 +74,22 @@ fn main() {
 
     // --- Control Handler State ---
     let mut control = Control::new();
-    control.set_sender(tx.clone());
+    control.set_sender(tx);
     control.run_threaded();
-
-    all_weapons.sort();
 
     // --- Calculate X/Y for each weapon using calculator handler ---
     use modules::handlers::calculator::ScopeSensitivityCalculator;
     let mut calc = ScopeSensitivityCalculator::new();
-    for weapon in &all_weapons {
-        let class = weapon_to_class
-            .get(weapon)
-            .map(|s| s.as_str())
-            .unwrap_or("AR");
-        let rpm = weapon_rpm.get(weapon).copied().unwrap_or(600);
-        let interval_ms = if rpm > 0 { 60000.0 / (rpm as f32) } else { 100.0 };
-        let (x, _) = match class {
-            "AR" | "SMG" | "LMG" | "MP" => {
-                let rcs_vals = calc.get_rcs_values(
-                    setup.get_fov() as f64,
-                    setup.get_sensitivity() as f64,
-                    setup.get_sensitivity_modifier_1() as f64,
-                    setup.get_sensitivity_modifier_25() as f64,
-                    setup.get_x_factor() as f64
-                );
-                let x_val = rcs_vals.get(0).copied().unwrap_or(0) as f32;
-                let y_val = 1.0;
-                (x_val, y_val)
-            }
-            _ => (0.0, 0.0),
-        };
-        weapon_xy.insert(weapon.clone(), (x, interval_ms));
+    for _weapon in &all_weapons {
+        let rcs_vals = calc.get_rcs_values(
+            setup.get_fov() as f64,
+            setup.get_sensitivity() as f64,
+            setup.get_sensitivity_modifier_1() as f64,
+            setup.get_sensitivity_modifier_25() as f64,
+            setup.get_x_factor() as f64
+        );
+        let _x_val = rcs_vals.get(0).copied().unwrap_or(0) as f32;
+        // Store calculations if needed
     }
 
     // --- ImGui Main Loop ---
@@ -516,14 +500,3 @@ fn main() {
             });
     });
 }
-
-// ---
-// Values
-// X = Horizontal Amount
-//     >0 goes right | <0 goes left
-// Y = Vertical Amount (use calculator to get yours)
-// Xmod = The Modifier that gets applied to X every iteration
-//     -1 Flips from Left -> Right -> Left
-//     0 Moves Horizontal once and then Stops
-//     1 does nothing since X * 1 = X
-// ---
