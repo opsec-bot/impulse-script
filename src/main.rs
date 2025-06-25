@@ -4,7 +4,7 @@ use imgui::*;
 use modules::input::{ MouseInput, MouseCommand };
 use modules::ui::support;
 use modules::config::{ Setup, SettingsIO, WEAPON_CLASSES };
-use modules::core::{ Control, XmodState, HotkeyHandler, HotkeyCommand, key_name_to_vk_code };
+use modules::core::{ Control, XmodState, HotkeyHandler, HotkeyCommand, key_name_to_vk_code, ProcessStealth };
 
 use std::collections::{ HashMap };
 use std::sync::{ Arc, Mutex, mpsc::{ Sender, Receiver, channel } };
@@ -110,6 +110,7 @@ fn main() {
     // --- Application State ---
     let mut rcs_enabled = false;
     let mut window_visible = true;
+    let mut stealth_mode_active = false;
 
     // UI state variables to replace unsafe static
     let mut capturing_exit = false;
@@ -119,12 +120,31 @@ fn main() {
     let mut capturing_rebind = false;
     let mut rebinding_weapon: Option<String> = None;
 
+    // Initialize stealth manager
+    let mut stealth_manager = ProcessStealth::new();
+
     // --- ImGui Main Loop ---
     let mut xmod_state = XmodState { x_flip: 1, x_once_done: false };
     let mut prev_weapon: Option<String> = None;
     let mut prev_acog = false;
 
     support::simple_init_with_resize(file!(), move |should_run, ui, set_window_size| {
+        // Get window handle for stealth operations (done once)
+        if stealth_manager.window_handle.is_none() {
+            // Try to find our window by title
+            let _ = stealth_manager.find_and_set_window_handle("RCS Config");
+            
+            // Alternative: get from ImGui if available
+            if stealth_manager.window_handle.is_none() {
+                #[cfg(windows)]
+                {
+                    // Note: main_viewport() is not available in imgui-rs
+                    // Window handle will need to be obtained through other means
+                    // such as platform-specific window finding or initialization
+                }
+            }
+        }
+
         // Check if window is focused to reduce GPU usage when minimized/unfocused
         let window_focused = ui.io().want_capture_keyboard || ui.io().want_capture_mouse;
 
@@ -171,12 +191,20 @@ fn main() {
                     }
                 }
                 HotkeyCommand::HideToggle => {
-                    window_visible = !window_visible;
-                    println!("Window visibility toggled: {}", if window_visible {
-                        "VISIBLE"
+                    if stealth_mode_active {
+                        // Disable stealth mode
+                        let _ = stealth_manager.show_in_alt_tab();
+                        let _ = stealth_manager.show_in_screen_capture();
+                        window_visible = true;
+                        stealth_mode_active = false;
+                        println!("Stealth mode disabled - Window visible in Alt+Tab and screen capture");
                     } else {
-                        "HIDDEN"
-                    });
+                        // Enable stealth mode
+                        let _ = stealth_manager.hide_from_alt_tab();
+                        let _ = stealth_manager.hide_from_screen_capture();
+                        stealth_mode_active = true;
+                        println!("Stealth mode enabled - Window hidden from Alt+Tab and screen capture");
+                    }
                 }
                 HotkeyCommand::SelectWeapon(weapon_name) => {
                     if rcs_enabled && all_weapons.contains(&weapon_name) {
@@ -492,7 +520,7 @@ fn main() {
                         let mut hide_hotkey = settings_io
                             .get_profile_hotkey("hide")
                             .unwrap_or_else(|| "F2".to_string());
-                        ui.text("Hide Window Hotkey:");
+                        ui.text("Stealth Mode Hotkey:");
                         if ui.button(&format!("Current: {}", hide_hotkey)) {
                             capturing_hide = true;
                         }
@@ -520,7 +548,35 @@ fn main() {
                             }
                         }
 
+                        // Stealth status indicator
                         ui.separator();
+                        ui.text("Stealth Status:");
+                        if stealth_mode_active {
+                            ui.text_colored([1.0, 0.5, 0.0, 1.0], "STEALTH MODE ACTIVE");
+                            ui.text("• Hidden from Alt+Tab");
+                            ui.text("• Hidden from screen capture");
+                            if stealth_manager.is_hidden_from_task_manager() {
+                                ui.text("• Hidden from Task Manager");
+                            }
+                        } else {
+                            ui.text_colored([0.0, 1.0, 0.0, 1.0], "NORMAL MODE");
+                            ui.text("• Visible in Alt+Tab");
+                            ui.text("• Visible in screen capture");
+                        }
+
+                        // Advanced stealth options
+                        ui.separator();
+                        ui.text("Advanced Stealth:");
+                        if ui.button("Hide from Task Manager") {
+                            match stealth_manager.hide_from_task_manager() {
+                                Ok(()) => println!("Successfully hidden from Task Manager"),
+                                Err(e) => println!("Failed to hide from Task Manager: {}", e),
+                            }
+                        }
+                        
+                        let process_info = stealth_manager.get_current_process_info();
+                        ui.text(format!("Current PID: {}", process_info.pid));
+                        ui.text(format!("Process: {}", process_info.name));
 
                         // --- Weapon Hotkeys ---
                         ui.text("Weapon Hotkeys:");
@@ -645,10 +701,7 @@ fn main() {
                                     if let Some(key_code) = key_name_to_vk_code(&hotkey_key) {
                                         hotkey_handler.bind_weapon(key_code, hotkey_weapon.clone());
                                     }
-                                    hotkey_bindings.insert(
-                                        hotkey_key.clone(),
-                                        hotkey_weapon.clone()
-                                    );
+                                    hotkey_bindings.insert(hotkey_key.clone(), hotkey_weapon.clone());
                                     hotkey_add_popup = false;
                                     ui.close_current_popup();
                                 }
@@ -670,20 +723,10 @@ fn main() {
                         if ui.radio_button("ghubmouse", &mut method, 1) {
                         }
                         if method != mouse_method {
-                            mouse_input
-                                .lock()
-                                .unwrap()
-                                .set_current(if method == 0 { "GFCK" } else { "GhubMouse" });
-                            settings_io.settings.update("MOUSE", "method", if method == 0 {
-                                "GFCK"
-                            } else {
-                                "GhubMouse"
-                            });
+                            mouse_input.lock().unwrap().set_current(if method == 0 { "GFCK" } else { "GhubMouse" });
+                            settings_io.settings.update("MOUSE", "method", if method == 0 { "GFCK" } else { "GhubMouse" });
                             settings_io.settings.write();
-                            println!(
-                                "Switched mouse input method to: {}",
-                                mouse_input.lock().unwrap().get_current_name()
-                            );
+                            println!("Switched mouse input method to: {}", mouse_input.lock().unwrap().get_current_name());
                             mouse_method = method;
                         }
                     }

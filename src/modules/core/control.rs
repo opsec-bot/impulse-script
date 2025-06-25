@@ -2,6 +2,7 @@ use std::sync::{ Arc, Mutex, mpsc::Sender };
 use std::thread::{ self, JoinHandle };
 use std::time::Duration;
 
+#[cfg(windows)]
 use winapi::um::winuser::{ GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON };
 
 use crate::modules::input::MouseCommand;
@@ -110,9 +111,14 @@ impl Control {
 
 impl ControlState {
     fn check_status(&mut self) {
+        #[cfg(windows)]
         let is_active = unsafe {
             GetAsyncKeyState(VK_RBUTTON) < 0 && GetAsyncKeyState(VK_LBUTTON) < 0
         };
+        
+        #[cfg(not(windows))]
+        let is_active = false;
+        
         self.active = is_active;
     }
 
