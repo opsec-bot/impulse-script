@@ -140,9 +140,6 @@ impl ControlState {
         let is_active = unsafe {
             GetAsyncKeyState(VK_RBUTTON) < 0 && GetAsyncKeyState(VK_LBUTTON) < 0
         };
-        if is_active && !self.active {
-            println!("Both mouse buttons pressed: starting recoil compensation");
-        }
         self.active = is_active;
     }
 

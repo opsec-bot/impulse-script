@@ -189,38 +189,37 @@ fn main() {
                 while let Ok(cmd) = rx.try_recv() {
                     match cmd {
                         MouseCommand::Move(mut x, y) => {
-                            // --- Xmod logic in main thread ---
-                            let xmod_val = if acog_enabled {
-                                weapon_xmod_acog
-                                    .get(selected_weapon.as_ref().unwrap())
-                                    .copied()
-                                    .unwrap_or(1.0)
-                            } else {
-                                weapon_xmod
-                                    .get(selected_weapon.as_ref().unwrap())
-                                    .copied()
-                                    .unwrap_or(1.0)
-                            };
-                            match xmod_val as i32 {
-                                -1 => {
-                                    x *= xmod_state.x_flip;
-                                    xmod_state.x_flip *= -1;
-                                }
-                                0 => {
-                                    if xmod_state.x_once_done {
-                                        x = 0;
-                                    } else {
-                                        xmod_state.x_once_done = true;
+                            // Only run Xmod logic and move mouse if a weapon is selected
+                            if let Some(selected) = selected_weapon.as_ref() {
+                                let xmod_val = if acog_enabled {
+                                    weapon_xmod_acog.get(selected).copied().unwrap_or(1.0)
+                                } else {
+                                    weapon_xmod.get(selected).copied().unwrap_or(1.0)
+                                };
+                                match xmod_val as i32 {
+                                    -1 => {
+                                        x *= xmod_state.x_flip;
+                                        xmod_state.x_flip *= -1;
+                                    }
+                                    0 => {
+                                        if xmod_state.x_once_done {
+                                            x = 0;
+                                        } else {
+                                            xmod_state.x_once_done = true;
+                                        }
+                                    }
+                                    1 => {
+                                        // No change
+                                    }
+                                    _ => {
+                                        x = ((x as f32) * xmod_val) as i32;
                                     }
                                 }
-                                1 => {
-                                    // No change
-                                }
-                                _ => {
-                                    x = ((x as f32) * xmod_val) as i32;
-                                }
+                                mouse_input.lock().unwrap().move_relative(x, y);
+                            } else {
+                                // No weapon selected: do not move mouse!
+                                // Optionally, log or ignore
                             }
-                            mouse_input.lock().unwrap().move_relative(x, y);
                         }
                         MouseCommand::Click(b) => mouse_input.lock().unwrap().click(b),
                         MouseCommand::Down(b) => mouse_input.lock().unwrap().down(b),
@@ -232,22 +231,38 @@ fn main() {
                     // --- Recoil Control Tab ---
                     if let Some(_tab_item_token) = ui.tab_item("Recoil Control") {
                         // Weapon dropdown
+                        let weapons_by_class = settings_io.get_weapons_by_class();
                         if
                             let Some(_combo_token) = ui.begin_combo(
                                 "Select Weapon",
                                 selected_weapon.as_deref().unwrap_or("Select...")
                             )
                         {
-                            for weapon in &all_weapons {
-                                if
-                                    ui
-                                        .selectable_config(weapon)
-                                        .selected(selected_weapon.as_deref() == Some(weapon))
-                                        .build()
-                                {
-                                    selected_weapon = Some(weapon.clone());
+                            for class in &weapon_class_options {
+                                if let Some(weapons) = weapons_by_class.get(*class) {
+                                    ui.text(format!("--- {} ---", class));
+                                    for weapon in weapons {
+                                        if
+                                            ui
+                                                .selectable_config(weapon)
+                                                .selected(
+                                                    selected_weapon.as_deref() == Some(weapon)
+                                                )
+                                                .build()
+                                        {
+                                            selected_weapon = Some(weapon.clone());
+                                        }
+                                    }
                                 }
                             }
+                        }
+
+                        if selected_weapon.is_none() {
+                            ui.text_colored(
+                                [1.0, 0.3, 0.3, 1.0],
+                                "Please select a weapon to enable"
+                            );
+                            return;
                         }
                         // Acog toggle
                         if ui.checkbox("Acog (2.5x)", &mut acog_enabled) {
@@ -331,10 +346,23 @@ fn main() {
                             }
                             if ui.button("Add") {
                                 if !new_weapon_name.is_empty() && !new_weapon_class.is_empty() {
-                                    // Save new weapon to config
-                                    let combined = format!("0,1,100,0"); // Default values for new weapon (x, y, timing, xmod)
-                                    settings_io.save_wep(&new_weapon_name, &combined);
+                                    // Save new weapon to config using settings_io
+                                    settings_io.settings.update(&new_weapon_name, "X", 0.0);
+                                    settings_io.settings.update(&new_weapon_name, "Y", 1.0);
+                                    settings_io.settings.update(&new_weapon_name, "xmod", 0.0);
+                                    settings_io.settings.update(
+                                        &new_weapon_name,
+                                        "RPM",
+                                        new_weapon_rpm
+                                    );
+                                    settings_io.settings.update(
+                                        &new_weapon_name,
+                                        "class",
+                                        &new_weapon_class
+                                    );
+                                    settings_io.settings.write();
 
+                                    // Update runtime state
                                     weapon_classes
                                         .entry(new_weapon_class.clone())
                                         .or_default()

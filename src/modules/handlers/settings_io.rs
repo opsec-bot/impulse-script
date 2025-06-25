@@ -21,63 +21,77 @@ impl SettingsIO {
             settings.update("MOUSE", "method", "GFCK");
             settings.update("RCS_HOTKEY", "exit", "END");
 
-            // Default weapons (Wep, RPM)
-            let default_weapons: Vec<(&'static str, i32)> = vec![
-                ("416-C", 740),
-                ("552 COMMANDO", 690),
-                ("556XI", 690),
-                ("AK-12", 850),
-                ("AK-74M", 650),
-                ("AR33", 749),
-                ("ARX200", 700),
-                ("AUG A2", 720),
-                ("C7E", 800),
-                ("C8-SFW", 837),
-                ("F2", 980),
-                ("G36C", 780),
-                ("L85A2", 670),
-                ("M4", 750),
-                ("M762", 730),
-                ("R4-C", 860),
-                ("TYPE-89", 850),
+            // Default weapons (Wep, RPM, Class)
+            let default_weapons: Vec<(&'static str, i32, &'static str)> = vec![
+                // ARs
+                ("416-C", 740, "AR"),
+                ("552 COMMANDO", 690, "AR"),
+                ("556XI", 690, "AR"),
+                ("AK-12", 850, "AR"),
+                ("AK-74M", 650, "AR"),
+                ("AR33", 749, "AR"),
+                ("ARX200", 700, "AR"),
+                ("AUG A2", 720, "AR"),
+                ("C7E", 800, "AR"),
+                ("C8-SFW", 837, "AR"),
+                ("F2", 980, "AR"),
+                ("G36C", 780, "AR"),
+                ("L85A2", 670, "AR"),
+                ("M4", 750, "AR"),
+                ("M762", 730, "AR"),
+                ("R4-C", 860, "AR"),
+                ("TYPE-89", 850, "AR"),
                 // LMGs
-                ("6P41", 680),
-                ("ALDA 5.56", 900),
-                ("DP27", 550),
-                ("G8A1", 850),
-                ("LMG-E", 650),
-                ("M249 SAW", 650),
-                ("M249", 650),
-                ("T-95 LSW", 650),
+                ("6P41", 680, "LMG"),
+                ("ALDA 5.56", 900, "LMG"),
+                ("DP27", 550, "LMG"),
+                ("G8A1", 850, "LMG"),
+                ("LMG-E", 650, "LMG"),
+                ("M249 SAW", 650, "LMG"),
+                ("M249", 650, "LMG"),
+                ("T-95 LSW", 650, "LMG"),
                 // SMGs
-                ("9mm C1", 1100),
-                ("9x19VSN", 750),
-                ("AUG A3", 800),
-                ("FMG-9", 800),
-                ("K1A", 900),
-                ("M12", 650),
-                ("MP5", 800),
-                ("MP5K", 800),
-                ("MP7", 900),
-                ("P90", 970),
-                ("PDW9", 600),
-                ("SCORPION EVO 3 A1", 1080),
-                ("T-5 SMG", 900),
-                ("UMP45", 800),
-                ("UZK50GI", 700),
-                ("VECTOR .45 ACP", 1200)
+                ("9mm C1", 1100, "SMG"),
+                ("9x19VSN", 750, "SMG"),
+                ("AUG A3", 800, "SMG"),
+                ("FMG-9", 800, "SMG"),
+                ("K1A", 900, "SMG"),
+                ("M12", 650, "SMG"),
+                ("MP5", 800, "SMG"),
+                ("MP5K", 800, "SMG"),
+                ("MP7", 900, "SMG"),
+                ("P90", 970, "SMG"),
+                ("PDW9", 600, "SMG"),
+                ("SCORPION EVO 3 A1", 1080, "SMG"),
+                ("T-5 SMG", 900, "SMG"),
+                ("UMP45", 800, "SMG"),
+                ("UZK50GI", 700, "SMG"),
+                ("VECTOR .45 ACP", 1200, "SMG"),
+                // MPs
+                ("SMG-11", 1270, "MP")
             ];
-            for (wep_name, rpm) in default_weapons {
+            for (wep_name, rpm, class) in default_weapons {
                 settings.update(wep_name, "X", 0.0);
                 settings.update(wep_name, "Y", 1.0);
                 settings.update(wep_name, "RPM", rpm);
                 settings.update(wep_name, "xmod", 0.0);
+                settings.update(wep_name, "class", class);
             }
             settings.write();
         } else {
             settings.read();
         }
         Self { settings }
+    }
+
+    pub fn get_weapons_by_class(&self) -> std::collections::BTreeMap<String, Vec<String>> {
+        let mut map = std::collections::BTreeMap::new();
+        for section in self.get_all_wep() {
+            if let Some(class) = self.settings.get(&section, "class") {
+                map.entry(class).or_insert_with(Vec::new).push(section);
+            }
+        }
+        map
     }
 
     pub fn get_weapon_values(&self, wep_name: &str, acog: bool) -> (f32, f32, f32) {
@@ -144,29 +158,6 @@ impl SettingsIO {
                 has_rpm && has_x && has_y && has_xmod
             })
             .collect()
-    }
-
-    pub fn save_wep(&mut self, wep_name: &str, combined: &str) {
-        self.settings.update(wep_name, "combined", combined);
-        if let Some((x, y, t, x_mod)) = Self::parse_combined(combined) {
-            self.settings.update(wep_name, "X", x.to_string());
-            self.settings.update(wep_name, "Y", y.to_string());
-            self.settings.update(wep_name, "Timing", t.to_string());
-            self.settings.update(wep_name, "x_mod", x_mod.to_string());
-        }
-        self.settings.write();
-    }
-
-    fn parse_combined(combined: &str) -> Option<(i32, i32, i32, f32)> {
-        let parts: Vec<&str> = combined.split(',').collect();
-        if parts.len() != 4 {
-            return None;
-        }
-        let x = parts[0].trim().parse().ok()?;
-        let y = parts[1].trim().parse().ok()?;
-        let timing = parts[2].trim().parse().ok()?;
-        let x_mod = parts[3].trim().parse().ok()?;
-        Some((x, y, timing, x_mod))
     }
 
     pub fn get_profile_hotkey(&self, hotkey_name: &str) -> Option<String> {
