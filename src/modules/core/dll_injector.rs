@@ -139,7 +139,7 @@ impl DllInjector {
         Err("DLL injection not supported on non-Windows platforms".to_string())
     }
 
-    /// Injects a DLL using enhanced manual mapping technique
+    /// Injects a DLL using enhanced manual mapping technique with comprehensive validation
     pub fn inject_dll_manual_map(&mut self, pid: u32, dll_path: &str) -> Result<(), String> {
         // Validate DLL file exists
         if !std::path::Path::new(dll_path).exists() {
@@ -150,9 +150,32 @@ impl DllInjector {
         let dll_data = std::fs::read(dll_path)
             .map_err(|e| format!("Failed to read DLL file '{}': {}", dll_path, e))?;
 
-        // Validate minimum file size
+        // Validate minimum file size (4KB minimum for PE headers)
         if dll_data.len() < 0x1000 {
-            return Err(format!("Invalid DLL file size: {} bytes", dll_data.len()));
+            return Err(format!("Invalid DLL file size: {} bytes (minimum 4KB required)", dll_data.len()));
+        }
+
+        // Validate it's a valid PE file before proceeding
+        self.validate_pe_structure(&dll_data)?;
+
+        // Check process architecture compatibility
+        #[cfg(windows)]
+        unsafe {
+            let process_handle = winapi::um::processthreadsapi::OpenProcess(
+                winapi::um::winnt::PROCESS_QUERY_INFORMATION,
+                winapi::shared::minwindef::FALSE,
+                pid
+            );
+            
+            if !process_handle.is_null() {
+                let is_compatible = self.manual_mapper.is_compatible_architecture(process_handle)
+                    .unwrap_or(false);
+                winapi::um::handleapi::CloseHandle(process_handle);
+                
+                if !is_compatible {
+                    return Err("Architecture mismatch between injector and target process".to_string());
+                }
+            }
         }
 
         // Configure manual mapper with enhanced stealth settings
@@ -170,6 +193,80 @@ impl DllInjector {
                 Err(e) => Err(format!("Manual mapping of '{}' failed: {}", dll_path, e))
             }
         }
+    }
+
+    /// Validates basic PE file structure
+    fn validate_pe_structure(&self, dll_data: &[u8]) -> Result<(), String> {
+        if dll_data.len() < std::mem::size_of::<u16>() {
+            return Err("File too small for DOS signature".to_string());
+        }
+
+        // Check DOS signature
+        let dos_signature = u16::from_le_bytes([dll_data[0], dll_data[1]]);
+        if dos_signature != 0x5A4D { // "MZ"
+            return Err("Invalid DOS signature - not a valid PE file".to_string());
+        }
+
+        if dll_data.len() < 0x40 {
+            return Err("File too small for DOS header".to_string());
+        }
+
+        // Get NT header offset
+        let nt_offset = u32::from_le_bytes([
+            dll_data[0x3C], dll_data[0x3D], dll_data[0x3E], dll_data[0x3F]
+        ]) as usize;
+
+        if nt_offset >= dll_data.len() || nt_offset + 4 > dll_data.len() {
+            return Err("Invalid NT header offset".to_string());
+        }
+
+        // Check PE signature
+        let pe_signature = u32::from_le_bytes([
+            dll_data[nt_offset], 
+            dll_data[nt_offset + 1], 
+            dll_data[nt_offset + 2], 
+            dll_data[nt_offset + 3]
+        ]);
+        
+        if pe_signature != 0x00004550 { // "PE\0\0"
+            return Err("Invalid PE signature".to_string());
+        }
+
+        Ok(())
+    }
+
+    /// Enhanced process discovery with validation
+    pub fn find_process_by_name_validated(&self, process_name: &str) -> Result<Vec<u32>, String> {
+        let pids = self.find_process_by_name(process_name);
+        
+        if pids.is_empty() {
+            return Err(format!("No processes found with name: {}", process_name));
+        }
+
+        // Validate each process can be opened
+        let mut valid_pids = Vec::new();
+        
+        #[cfg(windows)]
+        for &pid in &pids {
+            unsafe {
+                let handle = winapi::um::processthreadsapi::OpenProcess(
+                    winapi::um::winnt::PROCESS_QUERY_INFORMATION,
+                    winapi::shared::minwindef::FALSE,
+                    pid
+                );
+                
+                if !handle.is_null() {
+                    valid_pids.push(pid);
+                    winapi::um::handleapi::CloseHandle(handle);
+                }
+            }
+        }
+
+        if valid_pids.is_empty() {
+            return Err(format!("Found {} processes but none could be accessed", pids.len()));
+        }
+
+        Ok(valid_pids)
     }
 
     /// Build dynamic path from components

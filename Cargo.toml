@@ -29,7 +29,9 @@ features = [
     "memoryapi",
     "libloaderapi",
     "consoleapi",
-    "synchapi","errhandlingapi"
+    "synchapi",
+    "errhandlingapi",
+    "wow64apiset"
 ]
 
 [profile.release]
