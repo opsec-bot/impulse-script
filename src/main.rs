@@ -230,8 +230,14 @@ fn main() {
                 if let Some(_tab_bar_token) = ui.tab_bar("main_tabs") {
                     // --- Recoil Control Tab ---
                     if let Some(_tab_item_token) = ui.tab_item("Recoil Control") {
+                        let acog_label = String::from("ACOG");
+                        ui.checkbox(&acog_label, &mut acog_enabled);
+                        ui.same_line();
+
                         // Weapon dropdown
                         let weapons_by_class = settings_io.get_weapons_by_class();
+                        let combo_width = 200.0;
+                        ui.set_next_item_width(combo_width);
                         if
                             let Some(_combo_token) = ui.begin_combo(
                                 "Select Weapon",
@@ -257,19 +263,22 @@ fn main() {
                             }
                         }
 
-                        if selected_weapon.is_none() {
-                            ui.text_colored(
-                                [1.0, 0.3, 0.3, 1.0],
-                                "Please select a weapon to enable"
-                            );
-                            return;
-                        }
-                        // Acog toggle
-                        if ui.checkbox("Acog (2.5x)", &mut acog_enabled) {
-                            // No-op, state is toggled
+                        ui.spacing();
+                        let dropdown_x = ui.cursor_pos()[0];
+                        let dropdown_y = ui.cursor_pos()[1];
+
+                        ui.set_cursor_pos([dropdown_x, dropdown_y + 30.0]);
+
+                        let button_width = ui.calc_text_size("Add Weapon")[0] + 32.0;
+                        let button_x = dropdown_x + combo_width - button_width + 83.0;
+                        let button_y = dropdown_y + 30.0 - 33.0;
+
+                        ui.set_cursor_pos([button_x, button_y]);
+                        if ui.button("Add Weapon") {
+                            add_weapon_popup = true;
                         }
 
-                        // X/Y Sliders for selected weapon (default or acog)
+                        // X/Y Sliders for selected weapon
                         if let Some(weapon) = &selected_weapon {
                             let (x, y, xmod_val) = settings_io.get_weapon_values(
                                 weapon,
@@ -317,10 +326,6 @@ fn main() {
                             }
                         }
 
-                        // Add Weapon Dialog
-                        if ui.button("Add Weapon") {
-                            add_weapon_popup = true;
-                        }
                         if add_weapon_popup {
                             ui.open_popup("AddWeaponPopup");
                         }
@@ -346,7 +351,6 @@ fn main() {
                             }
                             if ui.button("Add") {
                                 if !new_weapon_name.is_empty() && !new_weapon_class.is_empty() {
-                                    // Save new weapon to config using settings_io
                                     settings_io.settings.update(&new_weapon_name, "X", 0.0);
                                     settings_io.settings.update(&new_weapon_name, "Y", 1.0);
                                     settings_io.settings.update(&new_weapon_name, "xmod", 0.0);
@@ -362,7 +366,6 @@ fn main() {
                                     );
                                     settings_io.settings.write();
 
-                                    // Update runtime state
                                     weapon_classes
                                         .entry(new_weapon_class.clone())
                                         .or_default()
