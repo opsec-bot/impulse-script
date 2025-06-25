@@ -3,7 +3,7 @@ mod modules;
 use imgui::*;
 use modules::input::{ MouseInput, MouseCommand };
 use modules::ui::support;
-use modules::config::{ Setup, SettingsIO };
+use modules::config::{ Setup, SettingsIO, WEAPON_CLASSES };
 use modules::core::{ Control, XmodState };
 
 use std::collections::{ HashMap };
@@ -44,7 +44,6 @@ fn main() {
     let mut new_weapon_name = String::new();
     let mut new_weapon_rpm = 600;
     let mut new_weapon_class = String::new();
-    let weapon_class_options = vec!["AR", "SMG", "LMG", "MP"];
     let mut hotkey_bindings: HashMap<String, String> = HashMap::new();
     let mut hotkey_add_popup = false;
     let mut hotkey_weapon = String::new();
@@ -141,7 +140,7 @@ fn main() {
                                 selected_weapon.as_deref().unwrap_or("Select...")
                             )
                         {
-                            for class in &weapon_class_options {
+                            for class in WEAPON_CLASSES {
                                 if let Some(weapons) = weapons_by_class.get(*class) {
                                     ui.text(format!("--- {} ---", class));
                                     for weapon in weapons {
@@ -238,7 +237,7 @@ fn main() {
                                     new_weapon_class.as_str()
                                 )
                             {
-                                for class in &weapon_class_options {
+                                for class in WEAPON_CLASSES {
                                     if
                                         ui
                                             .selectable_config(class)

@@ -1,5 +1,6 @@
-use crate::modules::settings::Settings;
-use crate::modules::setup_class::Setup;
+use super::weapon_data::{ DEFAULT_WEAPONS };
+use super::settings::Settings;
+use super::setup_class::Setup;
 
 pub struct SettingsIO {
     pub settings: Settings,
@@ -12,67 +13,27 @@ impl SettingsIO {
         if !std::path::Path::new(config_path).exists() {
             let mut setup = Setup::new(false);
             setup.get_mouse_sensitivity_settings();
-            settings.update("GAME", "fov", setup.get_fov());
-            settings.update("GAME", "sens", setup.get_sensitivity());
-            settings.update("GAME", "sens_1x", setup.get_sensitivity_modifier_1());
-            settings.update("GAME", "sens_25x", setup.get_sensitivity_modifier_25());
-            settings.update("GAME", "dpi", 800);
-            settings.update("MOUSE", "method", "GFCK");
-            settings.update("RCS_HOTKEY", "exit", "END");
 
-            // Default weapons (Wep, RPM, Class)
-            let default_weapons: Vec<(&'static str, i32, &'static str)> = vec![
-                // ARs
-                ("416-C", 740, "AR"),
-                ("552 COMMANDO", 690, "AR"),
-                ("556XI", 690, "AR"),
-                ("AK-12", 850, "AR"),
-                ("AK-74M", 650, "AR"),
-                ("AR33", 749, "AR"),
-                ("ARX200", 700, "AR"),
-                ("AUG A2", 720, "AR"),
-                ("C7E", 800, "AR"),
-                ("C8-SFW", 837, "AR"),
-                ("F2", 980, "AR"),
-                ("G36C", 780, "AR"),
-                ("L85A2", 670, "AR"),
-                ("M4", 750, "AR"),
-                ("M762", 730, "AR"),
-                ("R4-C", 860, "AR"),
-                ("TYPE-89", 850, "AR"),
-                // LMGs
-                ("6P41", 680, "LMG"),
-                ("ALDA 5.56", 900, "LMG"),
-                ("DP27", 550, "LMG"),
-                ("G8A1", 850, "LMG"),
-                ("LMG-E", 650, "LMG"),
-                ("M249 SAW", 650, "LMG"),
-                ("M249", 650, "LMG"),
-                ("T-95 LSW", 650, "LMG"),
-                // SMGs
-                ("9mm C1", 1100, "SMG"),
-                ("9x19VSN", 750, "SMG"),
-                ("AUG A3", 800, "SMG"),
-                ("FMG-9", 800, "SMG"),
-                ("K1A", 900, "SMG"),
-                ("M12", 650, "SMG"),
-                ("MP5", 800, "SMG"),
-                ("MP5K", 800, "SMG"),
-                ("MP7", 900, "SMG"),
-                ("P90", 970, "SMG"),
-                ("PDW9", 600, "SMG"),
-                ("SCORPION EVO 3 A1", 1080, "SMG"),
-                ("T-5 SMG", 900, "SMG"),
-                ("UMP45", 800, "SMG"),
-                ("UZK50GI", 700, "SMG"),
-                ("VECTOR .45 ACP", 1200, "SMG"),
-                // MPs
-                ("SMG-11", 1270, "MP")
+            // Batch initial settings
+            let initial_settings = [
+                ("GAME", "fov", setup.get_fov().to_string()),
+                ("GAME", "sens", setup.get_sensitivity().to_string()),
+                ("GAME", "sens_1x", setup.get_sensitivity_modifier_1().to_string()),
+                ("GAME", "sens_25x", setup.get_sensitivity_modifier_25().to_string()),
+                ("GAME", "dpi", "800".to_string()),
+                ("MOUSE", "method", "GFCK".to_string()),
+                ("RCS_HOTKEY", "exit", "END".to_string()),
             ];
-            for (wep_name, rpm, class) in default_weapons {
+
+            for (section, key, value) in initial_settings {
+                settings.update(section, key, value);
+            }
+
+            // Add default weapons from centralized data
+            for (wep_name, rpm, class) in DEFAULT_WEAPONS {
                 settings.update(wep_name, "X", 0.0);
                 settings.update(wep_name, "Y", 1.0);
-                settings.update(wep_name, "RPM", rpm);
+                settings.update(wep_name, "RPM", *rpm);
                 settings.update(wep_name, "xmod", 0.0);
                 settings.update(wep_name, "class", class);
             }
@@ -159,7 +120,6 @@ impl SettingsIO {
             .sections()
             .into_iter()
             .filter(|section| {
-
                 let s = section.to_ascii_lowercase();
 
                 if s == "game" || s == "mouse" || s == "rcs_hotkey" {

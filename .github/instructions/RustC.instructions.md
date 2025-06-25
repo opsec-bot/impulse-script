@@ -1,3 +1,7 @@
+---
+applyTo: '**'
+---
+
 # Rust Programming Copilot Instructions
 
 ## Basic Principles
