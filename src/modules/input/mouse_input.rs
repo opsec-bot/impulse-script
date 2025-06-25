@@ -1,5 +1,5 @@
-use crate::modules::input_method_gfck::InputMethodGFCK;
-use crate::modules::input_method_ghub::InputMethodGhubMouse;
+use crate::modules::input::gfck::InputMethodGFCK;
+use crate::modules::input::ghub::InputMethodGhubMouse;
 use std::ffi::c_int;
 use std::path::PathBuf;
 

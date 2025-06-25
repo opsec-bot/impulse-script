@@ -1,2 +1,20 @@
-/target
+# Rust build artifacts
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Config files (if they contain sensitive data)
 config.ini
+
+# DLL files (if they're not meant to be in repo)
+lib/*.dll

@@ -1,14 +1,12 @@
 mod modules;
 
 use imgui::*;
-use modules::mouse_input::MouseInput;
-use modules::support;
-use modules::handlers::{ setup_class::Setup, settings_io::SettingsIO };
-use modules::handlers::control::Control;
-use modules::mouse_command::MouseCommand;
-use modules::xmod_state::XmodState;
+use modules::input::{ MouseInput, MouseCommand };
+use modules::ui::support;
+use modules::config::{ Setup, SettingsIO };
+use modules::core::{ Control, XmodState };
 
-use std::collections::{ HashMap, BTreeMap };
+use std::collections::{ HashMap };
 use std::sync::{ Arc, Mutex, mpsc::{ Sender, Receiver, channel } };
 
 fn main() {
@@ -29,7 +27,6 @@ fn main() {
     let mut dpi = settings_io.get_dpi();
 
     // --- Weapon/Hotkey State ---
-    let mut weapon_classes: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut all_weapons = settings_io.get_all_wep();
     all_weapons.sort();
     let mut weapon_rpm: HashMap<String, i32> = HashMap::new();
@@ -40,9 +37,7 @@ fn main() {
         }
     }
 
-    let weapon_xmod: HashMap<String, f32> = HashMap::new();
-    let weapon_xmod_acog: HashMap<String, f32> = HashMap::new();
-    let mut weapon_to_class: HashMap<String, String> = HashMap::new();
+    // Remove unused variables
     let mut selected_weapon: Option<String> = None;
     let mut acog_enabled = false;
 
@@ -77,25 +72,11 @@ fn main() {
     control.set_sender(tx);
     control.run_threaded();
 
-    // --- Calculate X/Y for each weapon using calculator handler ---
-    use modules::handlers::calculator::ScopeSensitivityCalculator;
-    let mut calc = ScopeSensitivityCalculator::new();
-    for _weapon in &all_weapons {
-        let rcs_vals = calc.get_rcs_values(
-            setup.get_fov() as f64,
-            setup.get_sensitivity() as f64,
-            setup.get_sensitivity_modifier_1() as f64,
-            setup.get_sensitivity_modifier_25() as f64,
-            setup.get_x_factor() as f64
-        );
-        let _x_val = rcs_vals.get(0).copied().unwrap_or(0) as f32;
-        // Store calculations if needed
-    }
-
     // --- ImGui Main Loop ---
     let mut xmod_state = XmodState { x_flip: 1, x_once_done: false };
     let mut prev_weapon: Option<String> = None;
     let mut prev_acog = false;
+    
     support::simple_init_with_resize(file!(), move |_should_run, ui, set_window_size| {
         let window_flags =
             WindowFlags::NO_RESIZE |
@@ -116,11 +97,8 @@ fn main() {
                         MouseCommand::Move(mut x, y) => {
                             // Only run Xmod logic and move mouse if a weapon is selected
                             if let Some(selected) = selected_weapon.as_ref() {
-                                let xmod_val = if acog_enabled {
-                                    weapon_xmod_acog.get(selected).copied().unwrap_or(1.0)
-                                } else {
-                                    weapon_xmod.get(selected).copied().unwrap_or(1.0)
-                                };
+                                // Get xmod value directly from settings_io instead of HashMap
+                                let (_, _, xmod_val) = settings_io.get_weapon_values(selected, acog_enabled);
                                 match xmod_val as i32 {
                                     -1 => {
                                         x *= xmod_state.x_flip;
@@ -294,14 +272,6 @@ fn main() {
                                     );
                                     settings_io.settings.write();
 
-                                    weapon_classes
-                                        .entry(new_weapon_class.clone())
-                                        .or_default()
-                                        .push(new_weapon_name.clone());
-                                    weapon_to_class.insert(
-                                        new_weapon_name.clone(),
-                                        new_weapon_class.clone()
-                                    );
                                     weapon_rpm.insert(new_weapon_name.clone(), new_weapon_rpm);
                                     all_weapons.push(new_weapon_name.clone());
                                     selected_weapon = Some(new_weapon_name.clone());
@@ -340,7 +310,7 @@ fn main() {
                                 if imgui_key == (imgui::Key::Escape as usize) {
                                     exit_hotkey = "None".to_string();
                                 } else {
-                                    exit_hotkey = modules::keybinds
+                                    exit_hotkey = modules::ui::keybinds
                                         ::imgui_key_to_name(imgui_key as u32)
                                         .to_string();
                                 }
@@ -393,7 +363,7 @@ fn main() {
                                         .enumerate()
                                         .find(|&(_, &down)| down)
                                 {
-                                    hotkey_key = modules::keybinds
+                                    hotkey_key = modules::ui::keybinds
                                         ::imgui_key_to_name(imgui_key as u32)
                                         .to_string();
                                     capturing_hotkey = false;

@@ -46,10 +46,6 @@ impl Setup {
         }
     }
 
-    pub fn get_x_factor(&self) -> f32 {
-        self.x_factor
-    }
-
     fn get_user_document_folder() -> PathBuf {
         dirs::document_dir().unwrap()
     }

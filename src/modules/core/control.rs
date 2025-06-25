@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use winapi::um::winuser::{ GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON };
 
-use crate::modules::mouse_command::MouseCommand;
+use crate::modules::input::MouseCommand;
 struct ControlState {
     stop: bool,
     running: bool,

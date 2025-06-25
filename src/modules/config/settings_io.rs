@@ -1,5 +1,5 @@
-use crate::modules::handlers::settings::Settings;
-use crate::modules::handlers::setup_class::Setup;
+use crate::modules::settings::Settings;
+use crate::modules::setup_class::Setup;
 
 pub struct SettingsIO {
     pub settings: Settings,

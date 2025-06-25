@@ -1,14 +1,8 @@
-pub mod input_method_gfck;
-pub mod input_method_ghub;
-pub mod mouse_input;
-pub mod support;
-pub mod handlers {
-    pub mod setup_class;
-    pub mod settings;
-    pub mod settings_io;
-    pub mod calculator;
-    pub mod control;
-}
-pub mod mouse_command;
-pub mod xmod_state;
-pub mod keybinds;
+// Core application logic
+pub mod input;
+pub mod core;
+pub mod config;
+pub mod ui;
+
+// Re-exports for backward compatibility
+pub use config::*;
