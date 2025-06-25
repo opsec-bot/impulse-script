@@ -1,5 +1,3 @@
-use std::f64::consts::PI;
-
 pub struct ScopeSensitivityCalculator {
     pub fov: f64,
     pub sens: f64,

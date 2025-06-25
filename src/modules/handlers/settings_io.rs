@@ -2,7 +2,7 @@ use crate::modules::handlers::settings::Settings;
 pub struct SettingsIO {
     pub settings: Settings,
 }
-
+#[allow(dead_code)]
 impl SettingsIO {
     pub const HOTKEY: &'static str = "RCS_HOTKEY";
     pub const RCS: &'static str = "RCS";

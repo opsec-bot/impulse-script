@@ -10,13 +10,6 @@ use modules::mouse_command::MouseCommand;
 use std::collections::{ HashMap, BTreeMap };
 use std::sync::{ Arc, Mutex, mpsc::{ Sender, Receiver, channel } };
 
-#[derive(PartialEq, Eq, Clone, Copy)]
-enum Tab {
-    RecoilControl,
-    Hotkeys,
-    Mouse,
-    Settings,
-}
 
 fn main() {
     // --- State Initialization ---

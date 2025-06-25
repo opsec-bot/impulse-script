@@ -16,7 +16,7 @@ struct ControlState {
     move_x_modifier: f32,
     timing: f32,
 }
-
+#[allow(dead_code)]
 pub struct Control {
     name: &'static str,
     thread: Option<JoinHandle<()>>,
@@ -83,7 +83,7 @@ impl Control {
             })
         );
     }
-
+    #[allow(dead_code)]
     pub fn cleanup(&mut self) {
         let mut s = self.state.lock().unwrap();
         s.running = false;
@@ -125,6 +125,7 @@ impl Control {
     }
 }
 
+#[allow(dead_code)]
 // --- ControlState methods ---
 impl ControlState {
     fn check_status(&mut self) {
@@ -141,11 +142,6 @@ impl ControlState {
         if !self.stop {
             mouse_input.move_relative(self.move_x, self.move_y);
             std::thread::sleep(Duration::from_secs_f32(self.timing));
-            // Only update Y if you want vertical recoil, or keep both constant for fixed pattern
-            // self.move_y += 1; // Uncomment for increasing vertical recoil
-            // self.move_x = ...; // Only update if you want horizontal pattern
-            // Remove the exponential X update:
-            // self.move_x = ((self.move_x as f32) * self.move_x_modifier) as i32;
         }
     }
 

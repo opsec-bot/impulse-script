@@ -57,7 +57,7 @@ impl ScopeSensitivityCalculator {
 pub struct CursorMovementCalculator;
 
 impl CursorMovementCalculator {
-    pub fn calculate_cursor_movement(new_sensitivity: i32, dpi: i32) -> i32 {
+    pub fn calculate_cursor_movement(new_sensitivity: i32, _dpi: i32) -> i32 { // Need to implement use of DPI
         // SENSITIVITY = 8, MOVEMENT = 3, k = SENSITIVITY * MOVEMENT
         let k = 8.0 * 3.0;
         let cursor_movement = k / (new_sensitivity as f64);

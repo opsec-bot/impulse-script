@@ -3,6 +3,7 @@ use std::io::Write;
 
 use configparser::ini::Ini;
 use glob::glob;
+#[allow(dead_code)]
 pub struct Setup {
     debug: bool,
     config: Ini,
@@ -27,7 +28,7 @@ pub struct Setup {
     user_settings_path: PathBuf,
     first_launch: bool,
 }
-
+#[allow(dead_code)]
 impl Setup {
     pub fn new(debug: bool) -> Self {
         let user_document_folder = Self::get_user_document_folder();
@@ -199,7 +200,10 @@ converted = True
     }
 
     pub fn convert_for_recoil_calculation(&mut self) {
-        use crate::modules::handlers::ads_calc::{ScopeSensitivityCalculator, CursorMovementCalculator};
+        use crate::modules::handlers::ads_calc::{
+            ScopeSensitivityCalculator,
+            CursorMovementCalculator,
+        };
         let ads_calculator = ScopeSensitivityCalculator::new(
             self.fov as f64,
             self.sensitivity_y as f64,
@@ -216,7 +220,10 @@ converted = True
         let mut ads_recoil = [0; 6];
         for key in ["x1 ADS", "x15 ADS", "x2 ADS", "x25 ADS", "x3 ADS", "x4 ADS"] {
             if let Some(ads_val) = ads_values.get(key) {
-                ads_recoil[i] = CursorMovementCalculator::calculate_cursor_movement(*ads_val, self.dpi);
+                ads_recoil[i] = CursorMovementCalculator::calculate_cursor_movement(
+                    *ads_val,
+                    self.dpi
+                );
                 self.ads_recoil[i] = ads_recoil[i];
             }
             i += 1;
