@@ -7,7 +7,6 @@ pub mod handlers {
     pub mod settings;
     pub mod settings_io;
     pub mod calculator;
-    pub mod ads_calc;
     pub mod control;
 }
 pub mod mouse_command;

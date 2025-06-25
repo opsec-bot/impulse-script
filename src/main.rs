@@ -15,7 +15,6 @@ fn main() {
     // --- State Initialization ---
     let mut setup = Setup::new(true);
     setup.get_mouse_sensitivity_settings();
-    setup.create_config_file();
     setup.debug_logging();
 
     let mut settings_io = SettingsIO::new();
@@ -27,6 +26,7 @@ fn main() {
             MouseInput::new(gfck_path, ghub_path).expect("Failed to load mouse input DLLs")
         })
     );
+    let mut dpi = settings_io.get_dpi();
 
     // --- Weapon/Hotkey State ---
     let mut weapon_classes: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -69,7 +69,6 @@ fn main() {
     let mut sens = setup.get_sensitivity() as i32;
     let mut sens_1x = setup.get_sensitivity_modifier_1() as i32;
     let mut sens_25x = setup.get_sensitivity_modifier_25() as i32;
-    let mut dpi = setup.get_dpi(); // Use the public getter method
 
     // --- Mouse Command Channel ---
     let (tx, rx): (Sender<MouseCommand>, Receiver<MouseCommand>) = channel();
@@ -487,38 +486,28 @@ fn main() {
                             sens = setup.get_sensitivity() as i32;
                             sens_1x = setup.get_sensitivity_modifier_1() as i32;
                             sens_25x = setup.get_sensitivity_modifier_25() as i32;
-                            dpi = setup.get_dpi();
                             settings_io.settings.update("GAME", "fov", fov);
                             settings_io.settings.update("GAME", "sens", sens);
                             settings_io.settings.update("GAME", "sens_1x", sens_1x);
                             settings_io.settings.update("GAME", "sens_25x", sens_25x);
-                            settings_io.settings.update("GAME", "dpi", dpi);
-                            settings_io.settings.write();
                         }
                         ui.separator();
                         if ui.input_int("DPI", &mut dpi).build() {
-                            setup.set_dpi(dpi);
-                            setup.create_config_file();
-                            settings_io.settings.update("GAME", "dpi", dpi);
-                            settings_io.settings.write();
+                            settings_io.set_dpi(dpi);
                         }
                         if ui.slider_config("FOV", 60, 90).build(&mut fov) {
-                            setup.set_fov(fov);
                             settings_io.settings.update("GAME", "fov", fov);
                             settings_io.settings.write();
                         }
                         if ui.slider_config("Sensitivity", 1, 100).build(&mut sens) {
-                            setup.set_sensitivity(sens);
                             settings_io.settings.update("GAME", "sens", sens);
                             settings_io.settings.write();
                         }
                         if ui.slider_config("1x Sensitivity", 1, 100).build(&mut sens_1x) {
-                            setup.set_sensitivity_modifier_1(sens_1x);
                             settings_io.settings.update("GAME", "sens_1x", sens_1x);
                             settings_io.settings.write();
                         }
                         if ui.slider_config("2.5x Sensitivity", 1, 100).build(&mut sens_25x) {
-                            setup.set_sensitivity_modifier_25(sens_25x);
                             settings_io.settings.update("GAME", "sens_25x", sens_25x);
                             settings_io.settings.write();
                         }

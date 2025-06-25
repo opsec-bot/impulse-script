@@ -1,4 +1,4 @@
-use std::{ collections::HashMap, env, fs::{ self }, path::{ Path, PathBuf } };
+use std::{ env, fs::{ self }, path::{ Path, PathBuf } };
 
 use configparser::ini::Ini;
 use glob::glob;
@@ -15,11 +15,8 @@ pub struct Setup {
     sensitivity_modifier_3: i32,
     sensitivity_modifier_4: i32,
     recoil_x_value: i32,
-    pub(crate) dpi: i32,
     fov: i32,
     x_factor: f32,
-    ads: HashMap<String, f32>,
-    ads_recoil: [i32; 6],
     config_location: Option<PathBuf>,
     user_settings_path: PathBuf,
 }
@@ -46,11 +43,8 @@ impl Setup {
             sensitivity_modifier_3: 0,
             sensitivity_modifier_4: 0,
             recoil_x_value: 0,
-            dpi: 0,
             fov: 0,
             x_factor: 0.0,
-            ads: HashMap::new(),
-            ads_recoil: [0; 6],
             config_location,
             user_settings_path,
         }
@@ -58,14 +52,6 @@ impl Setup {
 
     pub fn get_x_factor(&self) -> f32 {
         self.x_factor
-    }
-
-    pub fn get_dpi(&self) -> i32 {
-        self.dpi
-    }
-
-    pub fn set_dpi(&mut self, dpi: i32) {
-        self.dpi = dpi;
     }
 
     fn get_user_document_folder() -> PathBuf {
@@ -142,59 +128,9 @@ impl Setup {
                 .unwrap()
                 .unwrap_or(0.0) as f32;
             self.fov = self.config.getfloat(display, "DefaultFOV").unwrap().unwrap_or(0.0) as i32;
-
-            self.convert_for_recoil_calculation();
         } else if self.debug {
             eprintln!("No GameSettings.ini found in expected location.");
         }
-    }
-
-    pub fn convert_for_recoil_calculation(&mut self) {
-        use crate::modules::handlers::ads_calc::{
-            ScopeSensitivityCalculator,
-            CursorMovementCalculator,
-        };
-        let ads_calculator = ScopeSensitivityCalculator::new(
-            self.fov as f64,
-            self.sensitivity_y as f64,
-            self.x_factor as f64,
-            self.sensitivity_modifier_1 as f64,
-            self.sensitivity_modifier_15 as f64,
-            self.sensitivity_modifier_2 as f64,
-            self.sensitivity_modifier_25 as f64,
-            self.sensitivity_modifier_3 as f64,
-            self.sensitivity_modifier_4 as f64
-        );
-        let ads_values = ads_calculator.calculate_ads_values();
-        let mut i = 0;
-        let mut ads_recoil = [0; 6];
-        for key in ["x1 ADS", "x15 ADS", "x2 ADS", "x25 ADS", "x3 ADS", "x4 ADS"] {
-            if let Some(ads_val) = ads_values.get(key) {
-                ads_recoil[i] = CursorMovementCalculator::calculate_cursor_movement(
-                    *ads_val,
-                    self.dpi
-                );
-                self.ads_recoil[i] = ads_recoil[i];
-            }
-            i += 1;
-        }
-        self.ads = ads_values
-            .into_iter()
-            .map(|(k, v)| (k, v as f32))
-            .collect();
-    }
-
-    pub fn create_config_file(&self) {
-        let mut user_config = Ini::new();
-        user_config.set("USER", "DPI", Some(self.dpi.to_string()));
-        let ads_str = self.ads_recoil
-            .iter()
-            .map(|v| v.to_string())
-            .collect::<Vec<_>>()
-            .join(",");
-        user_config.set("USER", "ads_recoil", Some(ads_str));
-        let config_path = self.user_settings_path.join("user.ini");
-        user_config.write(config_path).unwrap();
     }
 
     pub fn debug_logging(&self) {
@@ -202,13 +138,12 @@ impl Setup {
             return;
         }
         println!(
-            "Location: {:?}\nSensitivity: {}\nSENSITIVITY[X,Y]: ({}, {})\nRecoil: {}\nDPI: {}\nFOV: {}\nxFactor: {}\n1x: {}\n1.5x: {}\n2x: {}\n2.5x: {}\n3x: {}\n4x: {}\nAds Recoil: {:?}",
+            "Location: {:?}\nSensitivity: {}\nSENSITIVITY[X,Y]: ({}, {})\nRecoil: {}\nFOV: {}\nxFactor: {}\n1x: {}\n1.5x: {}\n2x: {}\n2.5x: {}\n3x: {}\n4x: {}",
             self.config_location,
             self.sensitivity,
             self.sensitivity_x,
             self.sensitivity_y,
             self.recoil_x_value,
-            self.dpi,
             self.fov,
             self.x_factor,
             self.sensitivity_modifier_1,
@@ -216,8 +151,7 @@ impl Setup {
             self.sensitivity_modifier_2,
             self.sensitivity_modifier_25,
             self.sensitivity_modifier_3,
-            self.sensitivity_modifier_4,
-            self.ads_recoil
+            self.sensitivity_modifier_4
         );
         let _ = fs::remove_file(self.user_settings_path.join("user.ini"));
     }
@@ -236,21 +170,5 @@ impl Setup {
 
     pub fn get_sensitivity_modifier_25(&self) -> f32 {
         self.sensitivity_modifier_25 as f32
-    }
-
-    pub fn set_fov(&mut self, fov: i32) {
-        self.fov = fov;
-    }
-
-    pub fn set_sensitivity(&mut self, sensitivity: i32) {
-        self.sensitivity = sensitivity;
-    }
-
-    pub fn set_sensitivity_modifier_1(&mut self, modifier: i32) {
-        self.sensitivity_modifier_1 = modifier;
-    }
-
-    pub fn set_sensitivity_modifier_25(&mut self, modifier: i32) {
-        self.sensitivity_modifier_25 = modifier;
     }
 }

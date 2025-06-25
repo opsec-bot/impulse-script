@@ -17,7 +17,7 @@ impl SettingsIO {
             settings.update("GAME", "sens", setup.get_sensitivity());
             settings.update("GAME", "sens_1x", setup.get_sensitivity_modifier_1());
             settings.update("GAME", "sens_25x", setup.get_sensitivity_modifier_25());
-            settings.update("GAME", "dpi", setup.get_dpi());
+            settings.update("GAME", "dpi", 800);
             settings.update("MOUSE", "method", "GFCK");
             settings.update("RCS_HOTKEY", "exit", "END");
 
@@ -92,6 +92,18 @@ impl SettingsIO {
             }
         }
         map
+    }
+
+    pub fn get_dpi(&self) -> i32 {
+        self.settings
+            .get("GAME", "dpi")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(800)
+    }
+
+    pub fn set_dpi(&mut self, dpi: i32) {
+        self.settings.update("GAME", "dpi", dpi);
+        self.settings.write();
     }
 
     pub fn get_weapon_rpm(&self, wep_name: &str) -> Option<i32> {
