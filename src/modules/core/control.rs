@@ -16,6 +16,11 @@ struct ControlState {
     timing: f32,
     x_flip: i32,
     x_once_done: bool,
+
+    sensitivity: i32,
+    dpi: i32,
+    raw_movement_x: f32,
+    raw_movement_y: f32,
 }
 pub struct Control {
     thread: Option<JoinHandle<()>>,
@@ -38,6 +43,10 @@ impl Control {
                     timing: 0.0,
                     x_flip: 1,
                     x_once_done: false,
+                    sensitivity: 0,
+                    dpi: 800,
+                    raw_movement_x: 0.0,
+                    raw_movement_y: 0.0,
                 })
             ),
             sender: None,
@@ -68,8 +77,7 @@ impl Control {
                         }
                         if !s.stop {
                             if let Some(ref sender) = sender {
-                                let x = s.move_x;
-                                let y = s.move_y;
+                                let (x, y) = s.calculate_dpi_adjusted_movement();
                                 sender.send(MouseCommand::Move(x, y)).ok();
                             }
                             std::thread::sleep(Duration::from_secs_f32(s.timing));
@@ -88,17 +96,35 @@ impl Control {
         s.move_y = 0;
         s.timing = 0.0;
         s.move_x_modifier = 1.0;
+        s.raw_movement_x = 0.0;
+        s.raw_movement_y = 0.0;
+    }
+
+    pub fn set_dpi(&mut self, dpi: i32) {
+        let mut state = self.state.lock().unwrap();
+        state.dpi = dpi;
+    }
+
+    pub fn set_sensitivity(&mut self, sensitivity: i32) {
+        let mut state = self.state.lock().unwrap();
+        state.sensitivity = sensitivity;
     }
 
     pub fn update(&mut self, x: i32, y: i32, t: i32, x_mod: f32) {
         self.reset();
         let mut s = self.state.lock().unwrap();
-        s.move_x = x;
-        s.move_y = y;
+        s.raw_movement_x = x as f32;
+        s.raw_movement_y = y as f32;
         s.timing = (t as f32) / 1000.0;
         s.move_x_modifier = x_mod;
         s.x_flip = 1;
         s.x_once_done = false;
+
+        // Calculate DPI-adjusted values immediately
+        let (adjusted_x, adjusted_y) = s.calculate_dpi_adjusted_movement();
+        s.move_x = adjusted_x;
+        s.move_y = adjusted_y;
+
         s.current(true);
         s.stop = false;
     }
@@ -115,11 +141,26 @@ impl ControlState {
         let is_active = unsafe {
             GetAsyncKeyState(VK_RBUTTON) < 0 && GetAsyncKeyState(VK_LBUTTON) < 0
         };
-        
+
         #[cfg(not(windows))]
         let is_active = false;
-        
+
         self.active = is_active;
+    }
+
+    fn calculate_dpi_adjusted_movement(&self) -> (i32, i32) {
+        if self.sensitivity == 0 || self.dpi == 0 {
+            return (self.raw_movement_x as i32, self.raw_movement_y as i32);
+        }
+
+        // Simple DPI scaling: movement scales inversely with DPI and sensitivity
+        let dpi_scale = 800.0 / (self.dpi as f32); // Normalize to 800 DPI
+        let sens_scale = 30.0 / (self.sensitivity as f32); // Normalize to sensitivity 30
+
+        let adjusted_x = self.raw_movement_x * dpi_scale * sens_scale;
+        let adjusted_y = self.raw_movement_y * dpi_scale * sens_scale;
+
+        (adjusted_x.round() as i32, adjusted_y.round() as i32)
     }
 
     fn current(&self, debug: bool) -> (i32, i32, f32, f32) {

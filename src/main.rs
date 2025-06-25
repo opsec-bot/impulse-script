@@ -127,6 +127,8 @@ fn main() {
     // --- Control Handler State ---
     let mut control = Control::new();
     control.set_sender(tx);
+    control.set_dpi(dpi);
+    control.set_sensitivity(sens);
     control.run_threaded();
 
     // --- Hotkey Handler State ---
@@ -744,7 +746,7 @@ fn main() {
                     // --- Settings Tab ---
                     if let Some(_tab_item_token) = ui.tab_item("Settings") {
                         if ui.button("Auto-import from GameSettings.ini") {
-                            let old_sens = sens; // Store current sensitivity before importing
+                            let old_sens = sens;
 
                             setup.get_mouse_sensitivity_settings();
                             fov = setup.get_fov() as i32;
@@ -756,6 +758,9 @@ fn main() {
                             settings_io.settings.update("GAME", "sens", sens);
                             settings_io.settings.update("GAME", "sens_1x", sens_1x);
                             settings_io.settings.update("GAME", "sens_25x", sens_25x);
+
+                            // Update control with new sensitivity
+                            control.set_sensitivity(sens);
 
                             // Auto-adjust weapon values if sensitivity changed during import
                             if old_sens != sens && old_sens != 0 {
@@ -783,13 +788,14 @@ fn main() {
                                 }
                             }
 
-                            previous_sensitivity = sens; // Update after adjustment
+                            previous_sensitivity = sens;
                         }
 
                         ui.separator();
 
                         if ui.input_int("DPI", &mut dpi).build() {
                             settings_io.set_dpi(dpi);
+                            control.set_dpi(dpi);
                         }
 
                         if ui.slider_config("FOV", 60, 90).build(&mut fov) {
@@ -798,6 +804,9 @@ fn main() {
                         }
 
                         if ui.slider_config("Sensitivity", 1, 100).build(&mut sens) {
+                            // Update control with new sensitivity
+                            control.set_sensitivity(sens);
+
                             // Auto-adjust weapon recoil values when sensitivity changes
                             update_all_weapon_recoil_for_sensitivity(
                                 &mut settings_io,
