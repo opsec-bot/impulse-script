@@ -4,11 +4,11 @@ use std::ptr;
 #[cfg(windows)]
 use winapi::{
     ctypes::c_void,
-    shared::{ minwindef::{ DWORD, BOOL, TRUE, FALSE, HMODULE }, ntdef::NULL },
+    shared::minwindef::{TRUE, FALSE},
     um::{
-        processthreadsapi::{ OpenProcess, CreateRemoteThread },
-        memoryapi::{ VirtualAllocEx, WriteProcessMemory },
-        libloaderapi::{ GetModuleHandleA, GetProcAddress },
+        processthreadsapi::{OpenProcess, CreateRemoteThread},
+        memoryapi::{VirtualAllocEx, WriteProcessMemory},
+        libloaderapi::{GetModuleHandleA, GetProcAddress},
         handleapi::CloseHandle,
         winnt::{
             PROCESS_CREATE_THREAD,
@@ -29,7 +29,7 @@ use winapi::{
     },
 };
 
-/// DLL injection manager for stealth operations
+#[allow(dead_code)]
 pub struct DllInjector {
     hide_screenshare_dll: String,
     unhide_screenshare_dll: String,
@@ -37,6 +37,7 @@ pub struct DllInjector {
     unhide_taskbar_dll: String,
 }
 
+#[allow(dead_code)]
 impl DllInjector {
     pub fn new() -> Self {
         Self {
@@ -47,7 +48,6 @@ impl DllInjector {
         }
     }
 
-    /// Inject DLL into target process
     pub fn inject_dll(&self, pid: u32, dll_path: &str) -> Result<(), String> {
         #[cfg(windows)]
         unsafe {
@@ -65,7 +65,6 @@ impl DllInjector {
                 return Err(format!("Failed to open process {}", pid));
             }
 
-            // Get LoadLibraryA address from kernel32.dll
             let kernel32_handle = GetModuleHandleA(b"kernel32.dll\0".as_ptr() as *const i8);
             if kernel32_handle.is_null() {
                 CloseHandle(process_handle);
@@ -81,7 +80,6 @@ impl DllInjector {
                 return Err("Failed to get LoadLibraryA address".to_string());
             }
 
-            // Allocate memory in target process
             let dll_path_cstring = CString::new(dll_path).map_err(|_| "Invalid DLL path")?;
             let dll_path_len = dll_path_cstring.as_bytes_with_nul().len();
 
@@ -98,7 +96,6 @@ impl DllInjector {
                 return Err("Failed to allocate memory in target process".to_string());
             }
 
-            // Write DLL path to allocated memory
             let mut bytes_written = 0;
             let write_result = WriteProcessMemory(
                 process_handle,
@@ -113,7 +110,6 @@ impl DllInjector {
                 return Err("Failed to write DLL path to target process".to_string());
             }
 
-            // Create remote thread to load DLL
             let remote_thread = CreateRemoteThread(
                 process_handle,
                 ptr::null_mut(),
@@ -129,7 +125,6 @@ impl DllInjector {
                 return Err("Failed to create remote thread".to_string());
             }
 
-            // Clean up handles
             CloseHandle(remote_thread);
             CloseHandle(process_handle);
 
@@ -140,27 +135,22 @@ impl DllInjector {
         Err("DLL injection not supported on non-Windows platforms".to_string())
     }
 
-    /// Hide window from screenshare by injecting appropriate DLL
     pub fn hide_from_screenshare(&self, pid: u32) -> Result<(), String> {
         self.inject_dll(pid, &self.hide_screenshare_dll)
     }
 
-    /// Unhide window from screenshare
     pub fn unhide_from_screenshare(&self, pid: u32) -> Result<(), String> {
         self.inject_dll(pid, &self.unhide_screenshare_dll)
     }
 
-    /// Hide window from taskbar/alt-tab
     pub fn hide_from_taskbar(&self, pid: u32) -> Result<(), String> {
         self.inject_dll(pid, &self.hide_taskbar_dll)
     }
 
-    /// Unhide window from taskbar/alt-tab
     pub fn unhide_from_taskbar(&self, pid: u32) -> Result<(), String> {
         self.inject_dll(pid, &self.unhide_taskbar_dll)
     }
 
-    /// Find process ID by name
     pub fn find_process_by_name(&self, process_name: &str) -> Vec<u32> {
         #[cfg(windows)]
         unsafe {
@@ -203,7 +193,6 @@ impl DllInjector {
         Vec::new()
     }
 
-    /// Get current process ID
     pub fn get_current_process_id(&self) -> u32 {
         #[cfg(windows)]
         unsafe {
@@ -214,7 +203,6 @@ impl DllInjector {
         0
     }
 
-    /// Check if DLL files exist
     pub fn validate_dlls(&self) -> Result<(), String> {
         let dlls = [
             &self.hide_screenshare_dll,

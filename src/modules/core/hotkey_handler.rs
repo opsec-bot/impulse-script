@@ -57,25 +57,21 @@ impl HotkeyHandler {
 
     pub fn check_hotkeys(&mut self) {
         if let Some(sender) = self.sender.clone() {
-            // Check exit key
             let sender_clone = sender.clone();
             self.check_key_press(self.exit_key, move || {
                 let _ = sender_clone.send(HotkeyCommand::Exit);
             });
 
-            // Check toggle key
             let sender_clone = sender.clone();
             self.check_key_press(self.toggle_key, move || {
                 let _ = sender_clone.send(HotkeyCommand::ToggleRcs);
             });
 
-            // Check hide key
             let sender_clone = sender.clone();
             self.check_key_press(self.hide_key, move || {
                 let _ = sender_clone.send(HotkeyCommand::HideToggle);
             });
 
-            // Check weapon bindings
             let bindings = self.weapon_bindings.lock().unwrap().clone();
             for (key_code, weapon_name) in bindings {
                 let sender_clone = sender.clone();

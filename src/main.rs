@@ -4,14 +4,21 @@ use imgui::*;
 use modules::input::{ MouseInput, MouseCommand };
 use modules::ui::support;
 use modules::config::{ Setup, SettingsIO, WEAPON_CLASSES };
-use modules::core::{ Control, XmodState, HotkeyHandler, HotkeyCommand, key_name_to_vk_code, ProcessStealth };
+use modules::core::{
+    Control,
+    XmodState,
+    HotkeyHandler,
+    HotkeyCommand,
+    key_name_to_vk_code,
+    ProcessGhost,
+};
 
 use std::collections::{ HashMap };
 use std::sync::{ Arc, Mutex, mpsc::{ Sender, Receiver, channel } };
 
 fn main() {
     // --- State Initialization ---
-    let mut setup = Setup::new(true);
+    let mut setup = Setup::new(false);
     setup.get_mouse_sensitivity_settings();
     setup.debug_logging();
 
@@ -77,7 +84,6 @@ fn main() {
     let mut hotkey_handler = HotkeyHandler::new();
     hotkey_handler.set_sender(hotkey_tx);
 
-    // Set default hotkeys
     if
         let Some(exit_key) = settings_io
             .get_profile_hotkey("exit")
@@ -100,7 +106,6 @@ fn main() {
         hotkey_handler.set_hide_key(hide_key);
     }
 
-    // Load weapon hotkeys
     for (weapon, key_name) in settings_io.get_all_weapon_hotkeys() {
         if let Some(key_code) = key_name_to_vk_code(&key_name) {
             hotkey_handler.bind_weapon(key_code, weapon);
@@ -110,9 +115,8 @@ fn main() {
     // --- Application State ---
     let mut rcs_enabled = false;
     let mut window_visible = true;
-    let mut stealth_mode_active = false;
+    let mut ghost_mode_active = false;
 
-    // UI state variables to replace unsafe static
     let mut capturing_exit = false;
     let mut capturing_toggle = false;
     let mut capturing_hide = false;
@@ -120,8 +124,7 @@ fn main() {
     let mut capturing_rebind = false;
     let mut rebinding_weapon: Option<String> = None;
 
-    // Initialize stealth manager
-    let mut stealth_manager = ProcessStealth::new();
+    let mut ghost_manager = ProcessGhost::new();
 
     // --- ImGui Main Loop ---
     let mut xmod_state = XmodState { x_flip: 1, x_once_done: false };
@@ -129,26 +132,12 @@ fn main() {
     let mut prev_acog = false;
 
     support::simple_init_with_resize(file!(), move |should_run, ui, set_window_size| {
-        // Get window handle for stealth operations (done once)
-        if stealth_manager.window_handle.is_none() {
-            // Try to find our window by title
-            let _ = stealth_manager.find_and_set_window_handle("RCS Config");
-            
-            // Alternative: get from ImGui if available
-            if stealth_manager.window_handle.is_none() {
-                #[cfg(windows)]
-                {
-                    // Note: main_viewport() is not available in imgui-rs
-                    // Window handle will need to be obtained through other means
-                    // such as platform-specific window finding or initialization
-                }
-            }
+        if ghost_manager.window_handle.is_none() {
+            let _ = ghost_manager.find_and_set_window_handle("RCS Config");
         }
 
-        // Check if window is focused to reduce GPU usage when minimized/unfocused
         let window_focused = ui.io().want_capture_keyboard || ui.io().want_capture_mouse;
 
-        // Reduce update frequency when not focused
         if !window_focused {
             std::thread::sleep(std::time::Duration::from_millis(16)); // ~60 FPS when not focused sometimes causes RCS to not work properly
         }
@@ -162,10 +151,8 @@ fn main() {
         let size = [600.0, 420.0];
         set_window_size(size);
 
-        // Check hotkeys
         hotkey_handler.check_hotkeys();
 
-        // Handle hotkey commands
         while let Ok(cmd) = hotkey_rx.try_recv() {
             match cmd {
                 HotkeyCommand::Exit => {
@@ -177,7 +164,6 @@ fn main() {
                         control.reset();
                         println!("RCS toggled: OFF");
                     } else {
-                        // Re-enable with current weapon if selected
                         if let Some(weapon) = &selected_weapon {
                             let (x, y, xmod_val) = settings_io.get_weapon_values(
                                 weapon,
@@ -191,19 +177,15 @@ fn main() {
                     }
                 }
                 HotkeyCommand::HideToggle => {
-                    if stealth_mode_active {
-                        // Disable stealth mode
-                        let _ = stealth_manager.show_in_alt_tab();
-                        let _ = stealth_manager.show_in_screen_capture();
+                    if ghost_mode_active {
+                        let _ = ghost_manager.show_in_alt_tab();
+                        let _ = ghost_manager.show_in_screen_capture();
                         window_visible = true;
-                        stealth_mode_active = false;
-                        println!("Stealth mode disabled - Window visible in Alt+Tab and screen capture");
+                        ghost_mode_active = false;
                     } else {
-                        // Enable stealth mode
-                        let _ = stealth_manager.hide_from_alt_tab();
-                        let _ = stealth_manager.hide_from_screen_capture();
-                        stealth_mode_active = true;
-                        println!("Stealth mode enabled - Window hidden from Alt+Tab and screen capture");
+                        let _ = ghost_manager.hide_from_alt_tab();
+                        let _ = ghost_manager.hide_from_screen_capture();
+                        ghost_mode_active = true;
                     }
                 }
                 HotkeyCommand::SelectWeapon(weapon_name) => {
@@ -215,14 +197,11 @@ fn main() {
             }
         }
 
-        // Handle scheduled mouse commands on the main thread
         while let Ok(cmd) = rx.try_recv() {
             match cmd {
                 MouseCommand::Move(mut x, y) => {
-                    // Only run Xmod logic and move mouse if a weapon is selected AND RCS is enabled
                     if rcs_enabled {
                         if let Some(selected) = selected_weapon.as_ref() {
-                            // Get xmod value directly from settings_io instead of HashMap
                             let (_, _, xmod_val) = settings_io.get_weapon_values(
                                 selected,
                                 acog_enabled
@@ -239,9 +218,7 @@ fn main() {
                                         xmod_state.x_once_done = true;
                                     }
                                 }
-                                1 => {
-                                    // No change
-                                }
+                                1 => {}
                                 _ => {
                                     x = ((x as f32) * xmod_val) as i32;
                                 }
@@ -268,7 +245,6 @@ fn main() {
                 if let Some(_tab_bar_token) = ui.tab_bar("main_tabs") {
                     // --- Recoil Control Tab ---
                     if let Some(_tab_item_token) = ui.tab_item("Recoil Control") {
-                        // RCS Status Indicator and Toggle Button
                         if rcs_enabled {
                             ui.text_colored([0.0, 1.0, 0.0, 1.0], "RCS: ENABLED");
                         } else {
@@ -280,7 +256,6 @@ fn main() {
                             if !rcs_enabled {
                                 control.reset();
                             } else {
-                                // Re-enable with current weapon if selected
                                 if let Some(weapon) = &selected_weapon {
                                     let (x, y, xmod_val) = settings_io.get_weapon_values(
                                         weapon,
@@ -362,7 +337,6 @@ fn main() {
                                 }
                             }
 
-                            // Use settings_io to load values
                             let (mut x, mut y, mut xmod_val) = settings_io.get_weapon_values(
                                 weapon,
                                 acog_enabled
@@ -455,7 +429,6 @@ fn main() {
 
                     // --- Hotkeys Tab ---
                     if let Some(_tab_item_token) = ui.tab_item("Hotkeys") {
-                        // Exit Button Hotkey
                         ui.text("Exit Hotkey:");
                         if ui.button(&format!("Current: {}", exit_hotkey)) {
                             capturing_exit = true;
@@ -484,7 +457,6 @@ fn main() {
                             }
                         }
 
-                        // Toggle RCS Hotkey
                         let mut toggle_hotkey = settings_io
                             .get_profile_hotkey("toggle")
                             .unwrap_or_else(|| "F1".to_string());
@@ -516,11 +488,10 @@ fn main() {
                             }
                         }
 
-                        // Hide Window Hotkey
                         let mut hide_hotkey = settings_io
                             .get_profile_hotkey("hide")
                             .unwrap_or_else(|| "F2".to_string());
-                        ui.text("Stealth Mode Hotkey:");
+                        ui.text("Ghost Mode Hotkey:");
                         if ui.button(&format!("Current: {}", hide_hotkey)) {
                             capturing_hide = true;
                         }
@@ -548,35 +519,15 @@ fn main() {
                             }
                         }
 
-                        // Stealth status indicator
                         ui.separator();
-                        ui.text("Stealth Status:");
-                        if stealth_mode_active {
-                            ui.text_colored([1.0, 0.5, 0.0, 1.0], "STEALTH MODE ACTIVE");
-                            ui.text("• Hidden from Alt+Tab");
-                            ui.text("• Hidden from screen capture");
-                            if stealth_manager.is_hidden_from_task_manager() {
-                                ui.text("• Hidden from Task Manager");
-                            }
+                        ui.text("Ghost Status:");
+                        ui.same_line();
+                        if ghost_mode_active {
+                            ui.text_colored([1.0, 0.5, 0.0, 1.0], "ACTIVE");
                         } else {
-                            ui.text_colored([0.0, 1.0, 0.0, 1.0], "NORMAL MODE");
-                            ui.text("• Visible in Alt+Tab");
-                            ui.text("• Visible in screen capture");
+                            ui.text_colored([0.0, 1.0, 0.0, 1.0], "DISABLED");
                         }
-
-                        // Advanced stealth options
                         ui.separator();
-                        ui.text("Advanced Stealth:");
-                        if ui.button("Hide from Task Manager") {
-                            match stealth_manager.hide_from_task_manager() {
-                                Ok(()) => println!("Successfully hidden from Task Manager"),
-                                Err(e) => println!("Failed to hide from Task Manager: {}", e),
-                            }
-                        }
-                        
-                        let process_info = stealth_manager.get_current_process_info();
-                        ui.text(format!("Current PID: {}", process_info.pid));
-                        ui.text(format!("Process: {}", process_info.name));
 
                         // --- Weapon Hotkeys ---
                         ui.text("Weapon Hotkeys:");
@@ -596,7 +547,6 @@ fn main() {
                             }
                         }
 
-                        // Handle rebinding
                         for weapon in weapons_to_rebind {
                             rebinding_weapon = Some(weapon);
                             capturing_rebind = true;
@@ -633,7 +583,6 @@ fn main() {
                             }
                         }
 
-                        // Remove weapons outside the iteration to avoid borrowing issues
                         for weapon in weapons_to_remove {
                             if
                                 let Some((_, key)) = weapon_hotkeys
@@ -647,7 +596,6 @@ fn main() {
                             }
                         }
 
-                        // Add weapon hotkey button at the bottom
                         if ui.button("+") {
                             hotkey_add_popup = true;
                         }
@@ -701,7 +649,10 @@ fn main() {
                                     if let Some(key_code) = key_name_to_vk_code(&hotkey_key) {
                                         hotkey_handler.bind_weapon(key_code, hotkey_weapon.clone());
                                     }
-                                    hotkey_bindings.insert(hotkey_key.clone(), hotkey_weapon.clone());
+                                    hotkey_bindings.insert(
+                                        hotkey_key.clone(),
+                                        hotkey_weapon.clone()
+                                    );
                                     hotkey_add_popup = false;
                                     ui.close_current_popup();
                                 }
@@ -723,10 +674,20 @@ fn main() {
                         if ui.radio_button("ghubmouse", &mut method, 1) {
                         }
                         if method != mouse_method {
-                            mouse_input.lock().unwrap().set_current(if method == 0 { "GFCK" } else { "GhubMouse" });
-                            settings_io.settings.update("MOUSE", "method", if method == 0 { "GFCK" } else { "GhubMouse" });
+                            mouse_input
+                                .lock()
+                                .unwrap()
+                                .set_current(if method == 0 { "GFCK" } else { "GhubMouse" });
+                            settings_io.settings.update("MOUSE", "method", if method == 0 {
+                                "GFCK"
+                            } else {
+                                "GhubMouse"
+                            });
                             settings_io.settings.write();
-                            println!("Switched mouse input method to: {}", mouse_input.lock().unwrap().get_current_name());
+                            println!(
+                                "Switched mouse input method to: {}",
+                                mouse_input.lock().unwrap().get_current_name()
+                            );
                             mouse_method = method;
                         }
                     }

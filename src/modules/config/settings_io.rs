@@ -14,7 +14,6 @@ impl SettingsIO {
             let mut setup = Setup::new(false);
             setup.get_mouse_sensitivity_settings();
 
-            // Batch initial settings
             let initial_settings = [
                 ("GAME", "fov", setup.get_fov().to_string()),
                 ("GAME", "sens", setup.get_sensitivity().to_string()),
@@ -29,7 +28,6 @@ impl SettingsIO {
                 settings.update(section, key, value);
             }
 
-            // Add default weapons from centralized data
             for (wep_name, rpm, class) in DEFAULT_WEAPONS {
                 settings.update(wep_name, "X", 0.0);
                 settings.update(wep_name, "Y", 1.0);
@@ -146,7 +144,6 @@ impl SettingsIO {
 
     pub fn get_all_weapon_hotkeys(&self) -> Vec<(String, String)> {
         let mut weapon_hotkeys = Vec::new();
-        // Get all weapons and check if they have hotkeys
         for weapon in self.get_all_wep() {
             if let Some(hotkey) = self.settings.get("RCS_HOTKEY", &weapon) {
                 if !hotkey.is_empty() {
@@ -157,7 +154,6 @@ impl SettingsIO {
         weapon_hotkeys
     }
     pub fn remove_weapon_hotkey(&mut self, weapon_name: &str) {
-        // Set empty value to effectively remove the hotkey
         self.settings.update("RCS_HOTKEY", weapon_name, "");
         self.settings.write();
     }
