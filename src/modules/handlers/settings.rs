@@ -7,7 +7,7 @@ pub struct Settings {
     pub config: Ini,
     pub file_name: String,
 }
-#[allow(dead_code)]
+
 impl Settings {
     pub fn new(file_name: &str) -> Self {
         Self {

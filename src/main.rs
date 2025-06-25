@@ -256,12 +256,22 @@ fn main() {
 
                         // X/Y Sliders for selected weapon (default or acog)
                         if let Some(weapon) = &selected_weapon {
+                            let (x, y, xmod_val) = settings_io.get_weapon_values(
+                                weapon,
+                                acog_enabled
+                            );
+
                             if prev_weapon != Some(weapon.clone()) || prev_acog != acog_enabled {
                                 xmod_state.x_flip = 1;
                                 xmod_state.x_once_done = false;
                                 prev_weapon = Some(weapon.clone());
                                 prev_acog = acog_enabled;
+
+                                // --- THIS IS THE IMPORTANT PART ---
+                                control.update(x as i32, y as i32, y as i32, xmod_val);
+                                let _ = control.current(true);
                             }
+
                             // Use settings_io to load values
                             let (mut x, mut y, mut xmod_val) = settings_io.get_weapon_values(
                                 weapon,

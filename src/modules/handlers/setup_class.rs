@@ -1,9 +1,7 @@
-use std::{ collections::HashMap, env, fs::{ self, File }, path::{ Path, PathBuf } };
-use std::io::Write;
+use std::{ collections::HashMap, env, fs::{ self }, path::{ Path, PathBuf } };
 
 use configparser::ini::Ini;
 use glob::glob;
-#[allow(dead_code)]
 pub struct Setup {
     debug: bool,
     config: Ini,
@@ -22,27 +20,18 @@ pub struct Setup {
     x_factor: f32,
     ads: HashMap<String, f32>,
     ads_recoil: [i32; 6],
-    user_document_folder: PathBuf,
     config_location: Option<PathBuf>,
-    appdata_dir: PathBuf,
     user_settings_path: PathBuf,
-    first_launch: bool,
 }
-#[allow(dead_code)]
+
 impl Setup {
     pub fn new(debug: bool) -> Self {
         let user_document_folder = Self::get_user_document_folder();
         let config_location = Self::get_game_settings_file(&user_document_folder);
         let appdata_dir = PathBuf::from(env::var("APPDATA").unwrap());
         let user_settings_path = appdata_dir.join("RCS");
-        let first_launch = Self::check_first_launch(&user_settings_path);
 
-        let mut config = Ini::new();
-        // If first launch, load the just-written default ini so config is populated immediately
-        let user_ini_path = user_settings_path.join("user.ini");
-        if user_ini_path.exists() {
-            let _ = config.load(&user_ini_path);
-        }
+        let config = Ini::new();
 
         Self {
             debug,
@@ -62,16 +51,9 @@ impl Setup {
             x_factor: 0.0,
             ads: HashMap::new(),
             ads_recoil: [0; 6],
-            user_document_folder,
             config_location,
-            appdata_dir,
             user_settings_path,
-            first_launch,
         }
-    }
-
-    pub fn set_x_factor(&mut self, xmod: f32) {
-        self.x_factor = xmod;
     }
 
     pub fn get_x_factor(&self) -> f32 {
@@ -84,44 +66,6 @@ impl Setup {
 
     pub fn set_dpi(&mut self, dpi: i32) {
         self.dpi = dpi;
-    }
-
-    pub fn import_game_settings(&mut self) {
-        self.get_mouse_sensitivity_settings();
-        // Update internal state from the new values
-        // (Assuming get_mouse_sensitivity_settings updates self's fields)
-    }
-
-    fn check_first_launch(user_settings_path: &Path) -> bool {
-        if !user_settings_path.exists() {
-            fs::create_dir_all(user_settings_path).unwrap();
-        }
-        let user_ini_path = user_settings_path.join("user.ini");
-        if !user_ini_path.exists() {
-            Self::write_default_ini(&user_ini_path);
-            return true;
-        }
-        false
-    }
-
-    fn write_default_ini(path: &Path) {
-        let default_content =
-            r#"[RCS]
-ingame_default = 90,7,58,146
-ar_timings = {'416-C': 8, '552 COMMANDO': 9, '556XI': 9, 'AK-12': 7, 'AK-74M': 9, 'AR33': 8, 'ARX200': 9, 'AUG A2': 8, 'C7E': 8, 'C8-SFW': 7, 'F2': 6, 'G36C': 8, 'L85A2': 9, 'M4': 8, 'M762': 8, 'R4-C': 7, 'TYPE-89': 7, 'Test': 6}
-smg_timings = {'9mm C1': 10, '9x19VSN': 8, 'AUG A3': 9, 'FMG-9': 8, 'K1A': 8, 'M12': 11, 'MP5': 8, 'MP5K': 8, 'MP5SD': 8, 'MP7': 7, 'MPX': 7, 'Mx4 Storm': 6, 'P10 RONI': 6, 'P90': 6, 'PDW9': 8, 'SCORPION EVO 3 A1': 6, 'T-5 SMG': 7, 'UMP45': 10, 'UZK50GI': 9, 'VECTOR .45 ACP': 5}
-lmg_timings = {'6P41': 9, 'ALDA 5.56': 7, 'DP27': 11, 'G8A1': 7, 'LMG-E': 8, 'M249 SAW': 9, 'M249': 9, 'T-95 LSW': 9}
-mp_timings = {'BEARING 9': 5, 'C75 Auto': 6, 'SMG-11': 5, 'SMG-12': 5, 'SPSMG9': 6, 'REAPER MK2': 6}
-bind_panic = End
-bind_toggle_menu = Ins
-window_width = 500
-window_height = 800
-converted = True
-
-[RCS_HOTKEY]
-"#;
-        let mut file = File::create(path).unwrap();
-        file.write_all(default_content.as_bytes()).unwrap();
     }
 
     fn get_user_document_folder() -> PathBuf {
@@ -258,10 +202,9 @@ converted = True
             return;
         }
         println!(
-            "Location: {:?}\nSensitivity: {}\nFirst Launch: {}\nSENSITIVITY[X,Y]: ({}, {})\nRecoil: {}\nDPI: {}\nFOV: {}\nxFactor: {}\n1x: {}\n1.5x: {}\n2x: {}\n2.5x: {}\n3x: {}\n4x: {}\nAds Recoil: {:?}",
+            "Location: {:?}\nSensitivity: {}\nSENSITIVITY[X,Y]: ({}, {})\nRecoil: {}\nDPI: {}\nFOV: {}\nxFactor: {}\n1x: {}\n1.5x: {}\n2x: {}\n2.5x: {}\n3x: {}\n4x: {}\nAds Recoil: {:?}",
             self.config_location,
             self.sensitivity,
-            self.first_launch,
             self.sensitivity_x,
             self.sensitivity_y,
             self.recoil_x_value,
