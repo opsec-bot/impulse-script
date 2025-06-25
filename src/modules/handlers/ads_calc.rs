@@ -22,7 +22,7 @@ impl ScopeSensitivityCalculator {
         x2modifier: f64,
         x25modifier: f64,
         x3modifier: f64,
-        x4modifier: f64,
+        x4modifier: f64
     ) -> Self {
         Self {
             fov,
@@ -38,8 +38,14 @@ impl ScopeSensitivityCalculator {
     }
 
     fn calculate_ads(&self, modifier: f64, fov_multiplier: f64, ads_multiplier: f64) -> i32 {
-        let fov_adjustment = (fov_multiplier * self.fov).to_radians().tan() / (self.fov.to_radians().tan());
-        ((modifier / (ads_multiplier / fov_adjustment) * self.x_factor * ads_multiplier * self.sens).round()) as i32
+        let fov_adjustment =
+            (fov_multiplier * self.fov).to_radians().tan() / self.fov.to_radians().tan();
+        (
+            (modifier / (ads_multiplier / fov_adjustment)) *
+            self.x_factor *
+            ads_multiplier *
+            self.sens
+        ).round() as i32
     }
 
     pub fn calculate_ads_values(&self) -> HashMap<String, i32> {
@@ -57,7 +63,7 @@ impl ScopeSensitivityCalculator {
 pub struct CursorMovementCalculator;
 
 impl CursorMovementCalculator {
-    pub fn calculate_cursor_movement(new_sensitivity: i32, _dpi: i32) -> i32 { // Need to implement use of DPI
+    pub fn calculate_cursor_movement(new_sensitivity: i32, dpi: i32) -> i32 {
         // SENSITIVITY = 8, MOVEMENT = 3, k = SENSITIVITY * MOVEMENT
         let k = 8.0 * 3.0;
         let cursor_movement = k / (new_sensitivity as f64);

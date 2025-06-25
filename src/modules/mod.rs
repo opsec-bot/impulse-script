@@ -12,3 +12,4 @@ pub mod handlers {
 }
 pub mod mouse_command;
 pub mod xmod_state;
+pub mod keybinds;

@@ -86,6 +86,12 @@ impl Setup {
         self.dpi = dpi;
     }
 
+    pub fn import_game_settings(&mut self) {
+        self.get_mouse_sensitivity_settings();
+        // Update internal state from the new values
+        // (Assuming get_mouse_sensitivity_settings updates self's fields)
+    }
+
     fn check_first_launch(user_settings_path: &Path) -> bool {
         if !user_settings_path.exists() {
             fs::create_dir_all(user_settings_path).unwrap();

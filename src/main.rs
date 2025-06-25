@@ -33,10 +33,11 @@ fn main() {
     let mut weapon_to_class: HashMap<String, String> = HashMap::new();
     let mut weapon_rpm: HashMap<String, i32> = HashMap::new();
     let mut weapon_xy: HashMap<String, (f32, f32)> = HashMap::new();
-    let mut weapon_xmod: HashMap<String, f32> = HashMap::new();
+    let weapon_xmod: HashMap<String, f32> = HashMap::new();
     let mut weapon_xy_acog: HashMap<String, (f32, f32)> = HashMap::new();
     let mut weapon_xmod_acog: HashMap<String, f32> = HashMap::new();
-    let mut all_weapons: Vec<String> = vec![];
+    let mut all_weapons = settings_io.get_all_wep();
+    all_weapons.sort();
     let mut selected_weapon: Option<String> = None;
     let mut acog_enabled = false;
 
@@ -52,7 +53,10 @@ fn main() {
     let mut exit_hotkey = settings_io
         .get_profile_hotkey("exit")
         .unwrap_or_else(|| "None".to_string());
-    let mut mouse_method = 0; // 0 = gfck, 1 = ghubmouse
+    let mut mouse_method = match settings_io.settings.get("MOUSE", "method").as_deref() {
+        Some("GhubMouse") => 1,
+        _ => 0, // Default to GFCK
+    };
 
     // --- Settings State ---
     let mut fov = setup.get_fov() as i32;
@@ -71,7 +75,16 @@ fn main() {
 
     // --- Parse hardcoded weapons from config ---
     let config = &settings_io.settings;
-    let mut add_weapon = |class: &str, timings_key: &str| {
+
+    fn add_weapons_from_timings(
+        class: &str,
+        timings_key: &str,
+        config: &modules::handlers::settings::Settings,
+        weapon_classes: &mut BTreeMap<String, Vec<String>>,
+        weapon_to_class: &mut HashMap<String, String>,
+        weapon_rpm: &mut HashMap<String, i32>,
+        all_weapons: &mut Vec<String>
+    ) {
         if let Some(timings_str) = config.get("RCS", timings_key) {
             let timings_str = timings_str.replace('\'', "\"");
             if let Ok(map) = serde_json::from_str::<HashMap<String, i32>>(&timings_str) {
@@ -79,43 +92,52 @@ fn main() {
                     weapon_classes.entry(class.to_string()).or_default().push(weapon.clone());
                     weapon_to_class.insert(weapon.clone(), class.to_string());
                     weapon_rpm.insert(weapon.clone(), rpm);
-                    all_weapons.push(weapon.clone());
-                    let x = config
-                        .get(&weapon, "X")
-                        .and_then(|v| v.parse().ok())
-                        .unwrap_or(0.0);
-                    let y = config
-                        .get(&weapon, "Y")
-                        .and_then(|v| v.parse().ok())
-                        .unwrap_or(1.0);
-                    let xmod = config
-                        .get(&weapon, "Xmod")
-                        .and_then(|v| v.parse().ok())
-                        .unwrap_or(1.0);
-                    weapon_xy.insert(weapon.clone(), (x, y));
-                    weapon_xmod.insert(weapon.clone(), xmod);
-                    let x_acog = config
-                        .get(&weapon, "X_acog")
-                        .and_then(|v| v.parse().ok())
-                        .unwrap_or(x);
-                    let y_acog = config
-                        .get(&weapon, "Y_acog")
-                        .and_then(|v| v.parse().ok())
-                        .unwrap_or(y);
-                    let xmod_acog = config
-                        .get(&weapon, "Xmod_acog")
-                        .and_then(|v| v.parse().ok())
-                        .unwrap_or(xmod);
-                    weapon_xy_acog.insert(weapon.clone(), (x_acog, y_acog));
-                    weapon_xmod_acog.insert(weapon.clone(), xmod_acog);
+                    if !all_weapons.contains(&weapon) {
+                        all_weapons.push(weapon);
+                    }
                 }
             }
         }
-    };
-    add_weapon("AR", "ar_timings");
-    add_weapon("SMG", "smg_timings");
-    add_weapon("LMG", "lmg_timings");
-    add_weapon("MP", "mp_timings");
+    }
+
+    // Call for each class
+    add_weapons_from_timings(
+        "AR",
+        "ar_timings",
+        config,
+        &mut weapon_classes,
+        &mut weapon_to_class,
+        &mut weapon_rpm,
+        &mut all_weapons
+    );
+    add_weapons_from_timings(
+        "SMG",
+        "smg_timings",
+        config,
+        &mut weapon_classes,
+        &mut weapon_to_class,
+        &mut weapon_rpm,
+        &mut all_weapons
+    );
+    add_weapons_from_timings(
+        "LMG",
+        "lmg_timings",
+        config,
+        &mut weapon_classes,
+        &mut weapon_to_class,
+        &mut weapon_rpm,
+        &mut all_weapons
+    );
+    add_weapons_from_timings(
+        "MP",
+        "mp_timings",
+        config,
+        &mut weapon_classes,
+        &mut weapon_to_class,
+        &mut weapon_rpm,
+        &mut all_weapons
+    );
+
     all_weapons.sort();
 
     // --- Calculate X/Y for each weapon using calculator handler ---
@@ -217,23 +239,6 @@ fn main() {
                                 selected_weapon.as_deref().unwrap_or("Select...")
                             )
                         {
-                            for class in &weapon_class_options {
-                                if let Some(weapons) = weapon_classes.get(*class) {
-                                    ui.text(format!("-- {} --", class));
-                                    for weapon in weapons {
-                                        let is_selected =
-                                            selected_weapon.as_deref() == Some(weapon.as_str());
-                                        if
-                                            ui
-                                                .selectable_config(weapon)
-                                                .selected(is_selected)
-                                                .build()
-                                        {
-                                            selected_weapon = Some(weapon.clone());
-                                        }
-                                    }
-                                }
-                            }
                         }
                         // Acog toggle
                         if ui.checkbox("Acog (2.5x)", &mut acog_enabled) {
@@ -280,11 +285,14 @@ fn main() {
                                     settings_io.settings.update(weapon, "Y_acog", y);
                                     settings_io.settings.update(weapon, "Xmod_acog", xmod_val);
                                 } else {
-                                    weapon_xy.insert(weapon.clone(), (x, y));
-                                    weapon_xmod.insert(weapon.clone(), xmod_val);
-                                    settings_io.settings.update(weapon, "X", x);
-                                    settings_io.settings.update(weapon, "Y", y);
-                                    settings_io.settings.update(weapon, "Xmod", xmod_val);
+                                    let combined = format!(
+                                        "{},{},{},{}",
+                                        x as i32,
+                                        y as i32,
+                                        y as i32,
+                                        xmod_val as f32
+                                    );
+                                    settings_io.save_wep(weapon, &combined);
                                 }
                                 control.update(x as i32, y as i32, y as i32, xmod_val);
                                 settings_io.settings.write();
@@ -323,17 +331,9 @@ fn main() {
                             if ui.button("Add") {
                                 if !new_weapon_name.is_empty() && !new_weapon_class.is_empty() {
                                     // Save new weapon to config
-                                    settings_io.settings.update(
-                                        &new_weapon_name,
-                                        "class",
-                                        &new_weapon_class
-                                    );
-                                    settings_io.settings.update(
-                                        &new_weapon_name,
-                                        "rpm",
-                                        new_weapon_rpm
-                                    );
-                                    settings_io.settings.write();
+                                    let combined = format!("0,1,100,0"); // Default values for new weapon (x, y, timing, xmod)
+                                    settings_io.save_wep(&new_weapon_name, &combined);
+
                                     weapon_classes
                                         .entry(new_weapon_class.clone())
                                         .or_default()
@@ -371,16 +371,18 @@ fn main() {
                         if capturing_exit {
                             ui.text("Press a key (ESC to clear)...");
                             if
-                                let Some(key) = ui
+                                let Some((imgui_key, _)) = ui
                                     .io()
                                     .keys_down.iter()
-                                    .position(|&down| down)
+                                    .enumerate()
+                                    .find(|&(_, &down)| down)
                             {
-                                // Map key index to string as needed
-                                if key == (imgui::Key::Escape as usize) {
+                                if imgui_key == (imgui::Key::Escape as usize) {
                                     exit_hotkey = "None".to_string();
                                 } else {
-                                    exit_hotkey = format!("Key{}", key);
+                                    exit_hotkey = modules::keybinds
+                                        ::imgui_key_to_name(imgui_key as u32)
+                                        .to_string();
                                 }
                                 settings_io.save_profile_hotkey("exit", &exit_hotkey);
                                 capturing_exit = false;
@@ -425,12 +427,15 @@ fn main() {
                             if capturing_hotkey {
                                 ui.text("Press a key...");
                                 if
-                                    let Some(key) = ui
+                                    let Some((imgui_key, _)) = ui
                                         .io()
                                         .keys_down.iter()
-                                        .position(|&down| down)
+                                        .enumerate()
+                                        .find(|&(_, &down)| down)
                                 {
-                                    hotkey_key = format!("Key{}", key);
+                                    hotkey_key = modules::keybinds
+                                        ::imgui_key_to_name(imgui_key as u32)
+                                        .to_string();
                                     capturing_hotkey = false;
                                 }
                             }
@@ -467,30 +472,34 @@ fn main() {
                         ui.text("Mouse Input Method:");
                         let mut method = mouse_method;
                         if ui.radio_button("gfck", &mut method, 0) {
-                            mouse_method = 0;
                         }
                         ui.same_line();
                         if ui.radio_button("ghubmouse", &mut method, 1) {
-                            mouse_method = 1;
                         }
                         if method != mouse_method {
-                            mouse_method = method;
                             mouse_input
                                 .lock()
                                 .unwrap()
-                                .set_current(if mouse_method == 0 { "GFCK" } else { "GhubMouse" });
+                                .set_current(if method == 0 { "GFCK" } else { "GhubMouse" });
+                            settings_io.settings.update("MOUSE", "method", if method == 0 {
+                                "GFCK"
+                            } else {
+                                "GhubMouse"
+                            });
+                            settings_io.settings.write();
                             println!(
                                 "Switched mouse input method to: {}",
                                 mouse_input.lock().unwrap().get_current_name()
                             );
+                            mouse_method = method;
                         }
-                        // Test buttons for mouse input
-                        if ui.button("Test Click") {
-                            mouse_input.lock().unwrap().click(1);
-                        }
-                        if ui.button("Move Right") {
-                            mouse_input.lock().unwrap().move_relative(100, 0);
-                        }
+                        // // Test buttons for mouse input
+                        // if ui.button("Test Click") {
+                        //     mouse_input.lock().unwrap().click(1);
+                        // }
+                        // if ui.button("Move Right") {
+                        //     mouse_input.lock().unwrap().move_relative(100, 0);
+                        // }
                     }
 
                     // --- Settings Tab ---
@@ -502,23 +511,39 @@ fn main() {
                             sens_1x = setup.get_sensitivity_modifier_1() as i32;
                             sens_25x = setup.get_sensitivity_modifier_25() as i32;
                             dpi = setup.get_dpi();
+                            settings_io.settings.update("GAME", "fov", fov);
+                            settings_io.settings.update("GAME", "sens", sens);
+                            settings_io.settings.update("GAME", "sens_1x", sens_1x);
+                            settings_io.settings.update("GAME", "sens_25x", sens_25x);
+                            settings_io.settings.update("GAME", "dpi", dpi);
+                            settings_io.settings.write();
                         }
                         ui.separator();
                         if ui.input_int("DPI", &mut dpi).build() {
                             setup.set_dpi(dpi);
                             setup.create_config_file();
+                            settings_io.settings.update("GAME", "dpi", dpi);
+                            settings_io.settings.write();
                         }
                         if ui.slider_config("FOV", 60, 90).build(&mut fov) {
                             setup.set_fov(fov);
+                            settings_io.settings.update("GAME", "fov", fov);
+                            settings_io.settings.write();
                         }
                         if ui.slider_config("Sensitivity", 1, 100).build(&mut sens) {
                             setup.set_sensitivity(sens);
+                            settings_io.settings.update("GAME", "sens", sens);
+                            settings_io.settings.write();
                         }
                         if ui.slider_config("1x Sensitivity", 1, 100).build(&mut sens_1x) {
                             setup.set_sensitivity_modifier_1(sens_1x);
+                            settings_io.settings.update("GAME", "sens_1x", sens_1x);
+                            settings_io.settings.write();
                         }
                         if ui.slider_config("2.5x Sensitivity", 1, 100).build(&mut sens_25x) {
                             setup.set_sensitivity_modifier_25(sens_25x);
+                            settings_io.settings.update("GAME", "sens_25x", sens_25x);
+                            settings_io.settings.write();
                         }
                     }
                 }
