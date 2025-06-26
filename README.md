@@ -1,4 +1,4 @@
-# Rust Macro - Recoil Control System
+# Rust Rust Macro - Recoil Control System
 
 Recoil control script built in Rust with ImGui for Rainbow Six Siege X
 
