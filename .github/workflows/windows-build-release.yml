@@ -40,23 +40,30 @@ jobs:
         shell: pwsh
         run: |
           git fetch --tags
+        
           $latestTag = git describe --tags --abbrev=0 --match "v*" 2>$null
           if (-not $latestTag) {
             $latestTag = "v1.0.0"
           }
           Write-Host "Latest tag: $latestTag"
-
+        
           $parts = $latestTag.TrimStart("v").Split(".")
           $major = [int]$parts[0]
           $minor = [int]$parts[1]
           $patch = [int]$parts[2] + 1
           $newTag = "v$major.$minor.$patch"
-
+        
           echo "new_tag=$newTag" >> $env:GITHUB_OUTPUT
+        
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
+        
+          # Set remote with token BEFORE pushing
+          git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}
+        
           git tag $newTag
           git push origin $newTag
+
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
