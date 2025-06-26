@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"] // Comment this line to see console output
+// #![windows_subsystem = "windows"] // Comment this line to see console output
 mod modules;
 
 use imgui::*;
@@ -11,7 +11,7 @@ use modules::core::{
     HotkeyHandler,
     HotkeyCommand,
     key_name_to_vk_code,
-    ProcessGhost
+    ProcessGhost,
 };
 
 use std::collections::{ HashMap };
@@ -76,6 +76,15 @@ fn main() {
 
     let gfck_path = std::path::PathBuf::from("lib/GFCK.dll");
     let ghub_path = std::path::PathBuf::from("lib/ghub_mouse.dll");
+
+    // Validate mouse input DLLs
+    if !gfck_path.exists() {
+        println!("⚠️  Warning: GFCK.dll not found at {}", gfck_path.display());
+    }
+    if !ghub_path.exists() {
+        println!("⚠️  Warning: ghub_mouse.dll not found at {}", ghub_path.display());
+    }
+
     let mouse_input = Arc::new(
         Mutex::new(unsafe {
             MouseInput::new(gfck_path, ghub_path).expect("Failed to load mouse input DLLs")
@@ -233,10 +242,12 @@ fn main() {
                         let _ = ghost_manager.show_in_screen_capture();
                         window_visible = true;
                         ghost_mode_active = false;
+                        println!("Ghost mode disabled");
                     } else {
                         let _ = ghost_manager.hide_from_alt_tab();
                         let _ = ghost_manager.hide_from_screen_capture();
                         ghost_mode_active = true;
+                        println!("Ghost mode enabled");
                     }
                 }
                 HotkeyCommand::SelectWeapon(weapon_name) => {
@@ -711,13 +722,12 @@ fn main() {
                             if ui.button("Bind") {
                                 if !hotkey_weapon.is_empty() && !hotkey_key.is_empty() {
                                     settings_io.save_profile_hotkey(&hotkey_weapon, &hotkey_key);
-                                    if let Some(key_code) = key_name_to_vk_code(&hotkey_key) {
-                                        hotkey_handler.bind_weapon(key_code, hotkey_weapon.clone());
-                                    }
                                     hotkey_bindings.insert(
                                         hotkey_key.clone(),
                                         hotkey_weapon.clone()
                                     );
+                                    hotkey_weapon.clear();
+                                    hotkey_key.clear();
                                     hotkey_add_popup = false;
                                     ui.close_current_popup();
                                 }
@@ -727,18 +737,14 @@ fn main() {
                                 ui.close_current_popup();
                             }
                         }
-                    }
 
-                    // --- Mouse Tab ---
-                    if let Some(_tab_item_token) = ui.tab_item("Mouse") {
+                        ui.separator();
                         ui.text("Mouse Input Method:");
                         let mut method = mouse_method;
-                        if ui.radio_button("gfck", &mut method, 0) {
-                        }
-                        ui.same_line();
-                        if ui.radio_button("ghubmouse", &mut method, 1) {
-                        }
-                        if method != mouse_method {
+                        if
+                            ui.radio_button("GFCK", &mut method, 0) ||
+                            ui.radio_button("GhubMouse", &mut method, 1)
+                        {
                             mouse_input
                                 .lock()
                                 .unwrap()
@@ -759,51 +765,44 @@ fn main() {
 
                     // --- Settings Tab ---
                     if let Some(_tab_item_token) = ui.tab_item("Settings") {
-                        if ui.button("Auto-import from GameSettings.ini") {
-                            let old_sens = sens;
+                        setup.get_mouse_sensitivity_settings();
+                        fov = setup.get_fov() as i32;
+                        sens = setup.get_sensitivity() as i32;
+                        sens_1x = setup.get_sensitivity_modifier_1() as i32;
+                        sens_25x = setup.get_sensitivity_modifier_25() as i32;
 
-                            setup.get_mouse_sensitivity_settings();
-                            fov = setup.get_fov() as i32;
-                            sens = setup.get_sensitivity() as i32;
-                            sens_1x = setup.get_sensitivity_modifier_1() as i32;
-                            sens_25x = setup.get_sensitivity_modifier_25() as i32;
+                        settings_io.settings.update("GAME", "fov", fov);
+                        settings_io.settings.update("GAME", "sens", sens);
+                        settings_io.settings.update("GAME", "sens_1x", sens_1x);
+                        settings_io.settings.update("GAME", "sens_25x", sens_25x);
 
-                            settings_io.settings.update("GAME", "fov", fov);
-                            settings_io.settings.update("GAME", "sens", sens);
-                            settings_io.settings.update("GAME", "sens_1x", sens_1x);
-                            settings_io.settings.update("GAME", "sens_25x", sens_25x);
+                        // Update control with new sensitivity
+                        control.set_sensitivity(sens);
 
-                            // Update control with new sensitivity
-                            control.set_sensitivity(sens);
+                        // Auto-adjust weapon values if sensitivity changed during import
+                        if previous_sensitivity != sens && previous_sensitivity != 0 {
+                            update_all_weapon_recoil_for_sensitivity(
+                                &mut settings_io,
+                                previous_sensitivity,
+                                sens,
+                                &all_weapons
+                            );
 
-                            // Auto-adjust weapon values if sensitivity changed during import
-                            if old_sens != sens && old_sens != 0 {
-                                update_all_weapon_recoil_for_sensitivity(
-                                    &mut settings_io,
-                                    old_sens,
-                                    sens,
-                                    &all_weapons
-                                );
-
-                                // Update the current weapon if RCS is enabled
-                                if rcs_enabled {
-                                    if let Some(weapon) = &selected_weapon {
-                                        let (x, y, xmod_val) = settings_io.get_weapon_values(
-                                            weapon,
-                                            acog_enabled
-                                        );
-                                        let rpm = weapon_rpm
-                                            .get(weapon)
-                                            .copied()
-                                            .unwrap_or(600) as f32;
-                                        let timing = (4234.44 / rpm + 2.58).round() as i32;
-                                        control.update(x as i32, y as i32, timing, xmod_val);
-                                    }
+                            // Update the current weapon if RCS is enabled
+                            if rcs_enabled {
+                                if let Some(weapon) = &selected_weapon {
+                                    let (x, y, xmod_val) = settings_io.get_weapon_values(
+                                        weapon,
+                                        acog_enabled
+                                    );
+                                    let rpm = weapon_rpm.get(weapon).copied().unwrap_or(600) as f32;
+                                    let timing = (4234.44 / rpm + 2.58).round() as i32;
+                                    control.update(x as i32, y as i32, timing, xmod_val);
                                 }
                             }
-
-                            previous_sensitivity = sens;
                         }
+
+                        previous_sensitivity = sens;
 
                         ui.separator();
 

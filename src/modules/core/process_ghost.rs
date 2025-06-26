@@ -26,18 +26,16 @@ pub struct ProcessGhost {
     pub window_handle: Option<HWND>,
     is_hidden_from_alt_tab: bool,
     is_hidden_from_capture: bool,
-    #[allow(dead_code)]
-    is_hidden_from_task_manager: bool,
     current_process_id: u32,
 }
 
 impl ProcessGhost {
     pub fn new() -> Self {
+        println!("🚀 Initializing ProcessGhost with advanced DLL injection capabilities");
         Self {
             window_handle: None,
             is_hidden_from_alt_tab: false,
             is_hidden_from_capture: false,
-            is_hidden_from_task_manager: false,
             current_process_id: Self::get_current_process_id_internal(),
         }
     }
@@ -239,7 +237,6 @@ impl ProcessGhost {
         Err("Windows API not available on this platform".to_string())
     }
 }
-
 impl Default for ProcessGhost {
     fn default() -> Self {
         Self::new()
