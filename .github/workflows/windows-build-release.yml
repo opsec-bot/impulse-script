@@ -1,6 +1,7 @@
 name: Build and Release
 
 on:
+  workflow_dispatch:  # manual trigger
   push:
     tags:
       - 'v*.*.*'
@@ -13,7 +14,7 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Important for fetching tags
+          fetch-depth: 0  # fetch all tags
 
       - name: Set up Rust
         uses: rust-lang/setup-rust@v1
@@ -52,13 +53,18 @@ jobs:
           $minor = [int]$parts[1]
           $patch = [int]$parts[2] + 1
           $newTag = "v$major.$minor.$patch"
+
           echo "new_tag=$newTag" >> $env:GITHUB_OUTPUT
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag $newTag
+          git push origin $newTag
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.get_version.outputs.new_tag }}
-          name: Release ${{ steps.get_version.outputs.new_tag }}
+          tag_name: ${{ env.new_tag }}
+          name: Release ${{ env.new_tag }}
           files: release.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
