@@ -29,7 +29,7 @@ jobs:
         run: |
           mkdir publish
           cp target/release/rust-macro.exe publish/
-          xcopy lib publish/lib /E /I /Y
+          powershell -Command "Copy-Item -Recurse -Force lib publish/lib"
 
       - name: Zip published output
         run: |
@@ -41,28 +41,34 @@ jobs:
         run: |
           git fetch --tags
           $latestTag = git describe --tags --abbrev=0 --match "v*" 2>$null
-          if (-not $latestTag) {
-            $latestTag = "v1.0.0"
+          if (-not $latestTag -or $latestTag -eq "") {
+            $latestTag = "v0.0.0"
           }
           Write-Host "Latest tag: $latestTag"
-
-          $parts = $latestTag.TrimStart("v").Split(".")
-          $major = [int]$parts[0]
-          $minor = [int]$parts[1]
-          $patch = [int]$parts[2] + 1
+    
+          $versionString = $latestTag.TrimStart("v")
+          $parts = $versionString.Split(".")
+          
+          if ($parts.Length -eq 3) {
+            $major = [int]$parts[0]
+            $minor = [int]$parts[1]
+            $patch = [int]$parts[2] + 1
+          } else {
+            $major = 1
+            $minor = 0
+            $patch = 1
+          }
+          
           $newTag = "v$major.$minor.$patch"
-
+          Write-Host "New tag: $newTag"
           echo "new_tag=$newTag" >> $env:GITHUB_OUTPUT
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git tag $newTag
-          git push origin $newTag
+
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.new_tag }}
-          name: Release ${{ env.new_tag }}
+          tag_name: ${{ steps.get_version.outputs.new_tag }}
+          name: Release ${{ steps.get_version.outputs.new_tag }}
           files: release.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
