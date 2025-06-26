@@ -10,34 +10,56 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Important for fetching tags
 
       - name: Set up Rust
-        uses: rust-lang/rustup-action@v1
+        uses: rust-lang/setup-rust@v1
         with:
-          toolchain: stable
+          rust-version: stable
 
-      - name: Build project
+      - name: Build
         run: cargo build --release
 
-      - name: Create ZIP release package
-        run: |
-          cd target/release
-          zip -r ../../rust-macro-release.zip rust-macro.exe
+      - name: Test
+        run: cargo test --release
 
-      - name: Get version from Cargo.toml
-        id: get_version
+      - name: Prepare publish folder
         run: |
-          echo "VERSION=$(grep '^version =' Cargo.toml | cut -d ' ' -f 3 | tr -d '\"\n')" >> $GITHUB_ENV
-          echo "TAG_NAME=v${{ env.VERSION }}" >> $GITHUB_ENV
+          mkdir publish
+          cp target/release/rust-macro.exe publish/
+          xcopy lib publish/lib /E /I /Y
+
+      - name: Zip published output
+        run: |
+          powershell Compress-Archive -Path "publish/*" -DestinationPath "release.zip"
+
+      - name: Get latest tag and generate next version
+        id: get_version
+        shell: pwsh
+        run: |
+          git fetch --tags
+          $latestTag = git describe --tags --abbrev=0 --match "v*" 2>$null
+          if (-not $latestTag) {
+            $latestTag = "v1.0.0"
+          }
+          Write-Host "Latest tag: $latestTag"
+
+          $parts = $latestTag.TrimStart("v").Split(".")
+          $major = [int]$parts[0]
+          $minor = [int]$parts[1]
+          $patch = [int]$parts[2] + 1
+          $newTag = "v$major.$minor.$patch"
+          echo "new_tag=$newTag" >> $env:GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.get_version.outputs.new_tag }}
           name: Release ${{ steps.get_version.outputs.new_tag }}
-          files: rust-macro-release.zip
+          files: release.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
 
