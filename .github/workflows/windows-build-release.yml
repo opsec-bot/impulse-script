@@ -1,10 +1,10 @@
 name: Build and Release
 
 on:
-  workflow_dispatch:  # manual trigger
+  workflow_dispatch:         # Manual trigger via UI
   push:
     tags:
-      - 'v*.*.*'
+      - 'v*.*.*'             # Trigger on version tags
 
 jobs:
   build:
@@ -14,12 +14,10 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # fetch all tags
+          fetch-depth: 0     # Required for full tag history
 
       - name: Set up Rust
-        uses: rust-lang/setup-rust@v1
-        with:
-          rust-version: stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Build
         run: cargo build --release
