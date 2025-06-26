@@ -1,0 +1,46 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Rust
+        uses: rust-lang/rustup-action@v1
+        with:
+          toolchain: stable
+
+      - name: Build project
+        run: cargo build --release
+
+      - name: Create ZIP release package
+        run: |
+          cd target/release
+          zip -r ../../rust-macro-release.zip rust-macro.exe
+
+      - name: Get version from Cargo.toml
+        id: get_version
+        run: |
+          echo "VERSION=$(grep '^version =' Cargo.toml | cut -d ' ' -f 3 | tr -d '\"\n')" >> $GITHUB_ENV
+          echo "TAG_NAME=v${{ env.VERSION }}" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_version.outputs.new_tag }}
+          name: Release ${{ steps.get_version.outputs.new_tag }}
+          files: rust-macro-release.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+
+      - name: Configure Git for push
+        run: |
+          git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}
