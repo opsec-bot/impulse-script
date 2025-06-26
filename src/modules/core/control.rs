@@ -120,7 +120,6 @@ impl Control {
         s.x_flip = 1;
         s.x_once_done = false;
 
-        // Calculate DPI-adjusted values immediately
         let (adjusted_x, adjusted_y) = s.calculate_dpi_adjusted_movement();
         s.move_x = adjusted_x;
         s.move_y = adjusted_y;
@@ -153,9 +152,8 @@ impl ControlState {
             return (self.raw_movement_x as i32, self.raw_movement_y as i32);
         }
 
-        // Simple DPI scaling: movement scales inversely with DPI and sensitivity
-        let dpi_scale = 800.0 / (self.dpi as f32); // Normalize to 800 DPI
-        let sens_scale = 30.0 / (self.sensitivity as f32); // Normalize to sensitivity 30
+        let dpi_scale = 800.0 / (self.dpi as f32);
+        let sens_scale = 30.0 / (self.sensitivity as f32);
 
         let adjusted_x = self.raw_movement_x * dpi_scale * sens_scale;
         let adjusted_y = self.raw_movement_y * dpi_scale * sens_scale;

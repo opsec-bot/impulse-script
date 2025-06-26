@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"] // Comment this line to see console output
+// #![windows_subsystem = "windows"] // Comment this line to see console output
 mod modules;
 
 use imgui::*;
@@ -22,10 +22,8 @@ fn calculate_recoil_adjustment(old_sensitivity: i32, new_sensitivity: i32, movem
         return movement;
     }
 
-    // Calculate the constant factor (equivalent to k = sensitivity * movement)
     let constant_factor = (old_sensitivity as f32) * movement;
 
-    // Calculate new movement using linear interpolation
     constant_factor / (new_sensitivity as f32)
 }
 
@@ -41,17 +39,14 @@ fn update_all_weapon_recoil_for_sensitivity(
     }
 
     for weapon in all_weapons {
-        // Update normal values
         let (x, y, xmod) = settings_io.get_weapon_values(weapon, false);
         let new_x = calculate_recoil_adjustment(old_sensitivity, new_sensitivity, x);
         let new_y = calculate_recoil_adjustment(old_sensitivity, new_sensitivity, y);
 
         settings_io.save_weapon_values(weapon, new_x, new_y, xmod, false);
 
-        // Update ACOG values if they exist
         let (x_acog, y_acog, xmod_acog) = settings_io.get_weapon_values(weapon, true);
         if x_acog != 0.0 || y_acog != 1.0 {
-            // Check if ACOG values are non-default
             let new_x_acog = calculate_recoil_adjustment(old_sensitivity, new_sensitivity, x_acog);
             let new_y_acog = calculate_recoil_adjustment(old_sensitivity, new_sensitivity, y_acog);
 
@@ -775,11 +770,8 @@ fn main() {
                         settings_io.settings.update("GAME", "sens", sens);
                         settings_io.settings.update("GAME", "sens_1x", sens_1x);
                         settings_io.settings.update("GAME", "sens_25x", sens_25x);
-
-                        // Update control with new sensitivity
                         control.set_sensitivity(sens);
 
-                        // Auto-adjust weapon values if sensitivity changed during import
                         if previous_sensitivity != sens && previous_sensitivity != 0 {
                             update_all_weapon_recoil_for_sensitivity(
                                 &mut settings_io,
@@ -788,7 +780,6 @@ fn main() {
                                 &all_weapons
                             );
 
-                            // Update the current weapon if RCS is enabled
                             if rcs_enabled {
                                 if let Some(weapon) = &selected_weapon {
                                     let (x, y, xmod_val) = settings_io.get_weapon_values(
@@ -817,10 +808,8 @@ fn main() {
                         }
 
                         if ui.slider_config("Sensitivity", 1, 100).build(&mut sens) {
-                            // Update control with new sensitivity
                             control.set_sensitivity(sens);
 
-                            // Auto-adjust weapon recoil values when sensitivity changes
                             update_all_weapon_recoil_for_sensitivity(
                                 &mut settings_io,
                                 previous_sensitivity,
@@ -828,7 +817,6 @@ fn main() {
                                 &all_weapons
                             );
 
-                            // Update the current weapon if RCS is enabled
                             if rcs_enabled {
                                 if let Some(weapon) = &selected_weapon {
                                     let (x, y, xmod_val) = settings_io.get_weapon_values(

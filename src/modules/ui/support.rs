@@ -42,7 +42,6 @@ pub fn init_with_startup<FInit, FUi>(title: &str, mut startup: FInit, mut run_ui
     let mut platform = WinitPlatform::new(&mut imgui);
     {
         let dpi_mode = if let Ok(factor) = std::env::var("IMGUI_EXAMPLE_FORCE_DPI_FACTOR") {
-            // Allow forcing of HiDPI factor for debugging purposes
             match factor.parse::<f64>() {
                 Ok(f) => HiDpiMode::Locked(f),
                 Err(e) => panic!("Invalid scaling factor: {}", e),
@@ -137,7 +136,6 @@ pub fn init_with_startup_with_resize<FInit, FUi>(title: &str, mut startup: FInit
     let mut platform = WinitPlatform::new(&mut imgui);
     {
         let dpi_mode = if let Ok(factor) = std::env::var("IMGUI_EXAMPLE_FORCE_DPI_FACTOR") {
-            // Allow forcing of HiDPI factor for debugging purposes
             match factor.parse::<f64>() {
                 Ok(f) => HiDpiMode::Locked(f),
                 Err(e) => panic!("Invalid scaling factor: {}", e),
@@ -173,7 +171,7 @@ pub fn init_with_startup_with_resize<FInit, FUi>(title: &str, mut startup: FInit
 
                     let mut run = true;
                     let mut requested_size: Option<[f32; 2]> = None;
-                    // Provide a callback to request window resize
+
                     run_ui(
                         &mut run,
                         ui,
@@ -185,7 +183,6 @@ pub fn init_with_startup_with_resize<FInit, FUi>(title: &str, mut startup: FInit
                         window_target.exit();
                     }
 
-                    // Actually resize the window if requested
                     if let Some(size) = requested_size {
                         use imgui_winit_support::winit::dpi::LogicalSize;
                         let _ = window.request_inner_size(
@@ -217,7 +214,6 @@ pub fn init_with_startup_with_resize<FInit, FUi>(title: &str, mut startup: FInit
         .expect("EventLoop error");
 }
 
-/// Creates the imgui context
 pub fn create_context() -> imgui::Context {
     let mut imgui = Context::create();
     imgui.fonts().add_font(
