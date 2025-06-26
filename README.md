@@ -11,6 +11,11 @@ Recoil control script built in Rust with ImGui for Rainbow Six Siege X
 - **Multiple Input Methods**: GFCK driver (universal) and GHub (Logitech only)
 - **Add weapons**: If a weapon isn't already added you can add it
 
+## Prerequisites
+Doesn't matter if you have a logitech mouse or not
+- [Logitech G HUB 2021.11.1775](https://www.unknowncheats.me/forum/downloads.php?do=file&id=39879)
+- [How to set up G HUB](https://www.youtube.com/watch?v=FgNEciqHZFE) — YouTube guide for proper installation
+
 ## Usage
 
 1. Run rust-macro.exe
