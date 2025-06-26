@@ -46,12 +46,12 @@ jobs:
           }
           Write-Host "Latest tag: $latestTag"
     
-        $parts = $latestTag.TrimStart("v").Split(".")
-        $major = [int]$parts[0]
-        $minor = [int]$parts[1]
-        $patch = [int]$parts[2] + 1
-        $newTag = "v$major.$minor.$patch"
-        echo "new_tag=$newTag" >> $env:GITHUB_OUTPUT
+          $parts = $latestTag.TrimStart("v").Split(".")
+          $major = [int]$parts[0]
+          $minor = [int]$parts[1]
+          $patch = [int]$parts[2] + 1
+          $newTag = "v$major.$minor.$patch"
+          echo "new_tag=$newTag" >> $env:GITHUB_OUTPUT
 
 
       - name: Create GitHub Release
