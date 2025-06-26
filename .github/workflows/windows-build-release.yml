@@ -29,7 +29,7 @@ jobs:
         run: |
           mkdir publish
           cp target/release/rust-macro.exe publish/
-          xcopy lib publish/lib /E /I /Y
+          powershell -Command "Copy-Item -Recurse -Force lib publish/lib"
 
       - name: Zip published output
         run: |
