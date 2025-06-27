@@ -760,40 +760,47 @@ fn main() {
 
                     // --- Settings Tab ---
                     if let Some(_tab_item_token) = ui.tab_item("Settings") {
-                        setup.get_mouse_sensitivity_settings();
-                        fov = setup.get_fov() as i32;
-                        sens = setup.get_sensitivity() as i32;
-                        sens_1x = setup.get_sensitivity_modifier_1() as i32;
-                        sens_25x = setup.get_sensitivity_modifier_25() as i32;
+                        if ui.button("Auto-import from GameSettings.ini") {
+                            let old_sens = sens;
 
-                        settings_io.settings.update("GAME", "fov", fov);
-                        settings_io.settings.update("GAME", "sens", sens);
-                        settings_io.settings.update("GAME", "sens_1x", sens_1x);
-                        settings_io.settings.update("GAME", "sens_25x", sens_25x);
-                        control.set_sensitivity(sens);
+                            setup.get_mouse_sensitivity_settings();
+                            fov = setup.get_fov() as i32;
+                            sens = setup.get_sensitivity() as i32;
+                            sens_1x = setup.get_sensitivity_modifier_1() as i32;
+                            sens_25x = setup.get_sensitivity_modifier_25() as i32;
 
-                        if previous_sensitivity != sens && previous_sensitivity != 0 {
-                            update_all_weapon_recoil_for_sensitivity(
-                                &mut settings_io,
-                                previous_sensitivity,
-                                sens,
-                                &all_weapons
-                            );
+                            settings_io.settings.update("GAME", "fov", fov);
+                            settings_io.settings.update("GAME", "sens", sens);
+                            settings_io.settings.update("GAME", "sens_1x", sens_1x);
+                            settings_io.settings.update("GAME", "sens_25x", sens_25x);
+                            control.set_sensitivity(sens);
 
-                            if rcs_enabled {
-                                if let Some(weapon) = &selected_weapon {
-                                    let (x, y, xmod_val) = settings_io.get_weapon_values(
-                                        weapon,
-                                        acog_enabled
-                                    );
-                                    let rpm = weapon_rpm.get(weapon).copied().unwrap_or(600) as f32;
-                                    let timing = (4234.44 / rpm + 2.58).round() as i32;
-                                    control.update(x as i32, y as i32, timing, xmod_val);
+                            if old_sens != sens && old_sens != 0 {
+                                update_all_weapon_recoil_for_sensitivity(
+                                    &mut settings_io,
+                                    old_sens,
+                                    sens,
+                                    &all_weapons
+                                );
+
+                                if rcs_enabled {
+                                    if let Some(weapon) = &selected_weapon {
+                                        let (x, y, xmod_val) = settings_io.get_weapon_values(
+                                            weapon,
+                                            acog_enabled
+                                        );
+                                        let rpm = weapon_rpm
+                                            .get(weapon)
+                                            .copied()
+                                            .unwrap_or(600) as f32;
+                                        let timing = (4234.44 / rpm + 2.58).round() as i32;
+                                        control.update(x as i32, y as i32, timing, xmod_val);
+                                    }
                                 }
                             }
-                        }
 
-                        previous_sensitivity = sens;
+                            previous_sensitivity = sens;
+                        }
 
                         ui.separator();
 
