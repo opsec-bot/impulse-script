@@ -3,6 +3,7 @@ mod modules;
 
 use imgui::*;
 use modules::input::{ MouseInput, MouseCommand };
+use std::time::{ Duration, Instant };
 use modules::ui::support;
 use modules::config::{ Setup, SettingsIO, WEAPON_CLASSES };
 use modules::core::{
@@ -66,6 +67,9 @@ fn main() {
     let mut setup = Setup::new(false);
     setup.get_mouse_sensitivity_settings();
     setup.debug_logging();
+
+    // --- Dynamic Frame Cap State ---
+    let mut last_activity = Instant::now();
 
     let mut settings_io = SettingsIO::new();
 
@@ -193,11 +197,12 @@ fn main() {
                 let _ = ghost_manager.find_and_set_window_handle("Impusle Config");
             }
 
-            let window_focused = ui.io().want_capture_keyboard || ui.io().want_capture_mouse;
+            // Dynamic frame cap logic
+            let idle = last_activity.elapsed() > Duration::from_secs(15);
 
-            if !window_focused {
-                std::thread::sleep(std::time::Duration::from_millis(16)); // ~60 FPS when not focused sometimes causes RCS to not work properly
-            }
+            let current_frame_cap = if rcs_enabled && !idle { 100 } else { 30 };
+            let frame_time = Duration::from_secs_f32(1.0 / (current_frame_cap as f32));
+            std::thread::sleep(frame_time);
 
             let window_flags =
                 WindowFlags::NO_RESIZE |
@@ -259,6 +264,7 @@ fn main() {
             while let Ok(cmd) = rx.try_recv() {
                 match cmd {
                     MouseCommand::Move(mut x, y) => {
+                        last_activity = Instant::now();
                         if rcs_enabled {
                             if let Some(selected) = selected_weapon.as_ref() {
                                 let (_, _, xmod_val) = settings_io.get_weapon_values(
