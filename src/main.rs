@@ -851,6 +851,16 @@ fn main() {
                             settings_io.settings.write();
                         }
                     }
+
+                    // --- About Tab ---
+                    if let Some(_tab_item_token) = ui.tab_item("About") {
+                        ui.text("Developed by github.com/opsec-bot");
+                        ui.text("Version: 1.0.1");
+                        ui.separator();
+                        ui.text("Program Information:");
+                        let fps = ui.io().framerate;
+                        ui.text(format!("FPS: {:.1}", fps));
+                    }
                 }
             });
     });
