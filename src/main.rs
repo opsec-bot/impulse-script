@@ -627,9 +627,9 @@ fn main() {
                             ui.text("Ghost Status:");
                             ui.same_line();
                             if ghost_mode_active {
-                                ui.text_colored([1.0, 0.5, 0.0, 1.0], "ACTIVE");
+                                ui.text_colored([0.0, 1.0, 0.0, 1.0], "ACTIVE");
                             } else {
-                                ui.text_colored([0.0, 1.0, 0.0, 1.0], "DISABLED");
+                                ui.text_colored([1.0, 0.5, 0.0, 1.0], "DISABLED");
                             }
                             ui.separator();
 
