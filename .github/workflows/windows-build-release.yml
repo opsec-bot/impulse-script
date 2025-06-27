@@ -1,10 +1,7 @@
 name: Build and Release
 
 on:
-  workflow_dispatch:         # Manual trigger via UI
-  push:
-    tags:
-      - 'v*.*.*'             # Trigger on version tags
+  workflow_dispatch:
 
 jobs:
   build:
@@ -42,24 +39,17 @@ jobs:
           git fetch --tags
           $latestTag = git describe --tags --abbrev=0 --match "v*" 2>$null
           if (-not $latestTag -or $latestTag -eq "") {
-            $latestTag = "v0.0.0"
+            $latestTag = "v1.0.0"
           }
           Write-Host "Latest tag: $latestTag"
-    
-          $versionString = $latestTag.TrimStart("v")
-          $parts = $versionString.Split(".")
           
-          if ($parts.Length -eq 3) {
-            $major = [int]$parts[0]
-            $minor = [int]$parts[1]
-            $patch = [int]$parts[2] + 1
-          } else {
-            $major = 1
-            $minor = 0
-            $patch = 1
-          }
-          
+          $parts = $latestTag.TrimStart("v").Split(".")
+          $major = [int]$parts[0]
+          $minor = [int]$parts[1]
+          $patch = [int]$parts[2] + 1
           $newTag = "v$major.$minor.$patch"
+          echo "new_tag=$newTag" >> $env:GITHUB_OUTPUT
+
           Write-Host "New tag: $newTag"
           echo "new_tag=$newTag" >> $env:GITHUB_OUTPUT
 
