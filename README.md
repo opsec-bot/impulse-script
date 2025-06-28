@@ -1,4 +1,4 @@
-# Rust Rust Macro - Recoil Control System
+# Impulse - Recoil Control Script
 
 Recoil control script built in Rust with ImGui for Rainbow Six Siege X
 
@@ -18,7 +18,7 @@ Doesn't matter if you have a logitech mouse or not
 
 ## Usage
 
-1. Run rust-macro.exe
+1. Run impulse.exe
 2. Select weapon
 3. Configure X/Y recoil values (-2 to 2 for X, 1 to 10 for Y)
 4. Enable RCS and test
@@ -96,8 +96,8 @@ When game sensitivity changes, the application automatically:
 ### Build Steps
 
 ```bash
-git clone https://github.com/opsec-bot/rust-macro.git
-cd rust-macro
+git clone https://github.com/opsec-bot/impulse-script.git
+cd impulse-script
 cargo build --release
 ```
 
