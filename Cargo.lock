@@ -614,6 +614,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "impulse"
+version = "0.1.0"
+dependencies = [
+ "configparser 3.1.0",
+ "dirs",
+ "glium",
+ "glob",
+ "imgui",
+ "imgui-glium-renderer",
+ "imgui-winit-support",
+ "ini",
+ "libloading",
+ "serde_json",
+ "winapi",
+]
+
+[[package]]
 name = "indexmap"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1268,23 +1285,6 @@ dependencies = [
  "getrandom 0.2.16",
  "libredox",
  "thiserror 2.0.12",
-]
-
-[[package]]
-name = "rust-macro"
-version = "0.1.0"
-dependencies = [
- "configparser 3.1.0",
- "dirs",
- "glium",
- "glob",
- "imgui",
- "imgui-glium-renderer",
- "imgui-winit-support",
- "ini",
- "libloading",
- "serde_json",
- "winapi",
 ]
 
 [[package]]

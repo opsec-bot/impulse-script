@@ -78,6 +78,6 @@ Game Settings Import → Settings I/O → Control Logic → Mouse Input → Hard
 
 ## Build Artifacts
 
-- `rust-macro.exe`: Main executable (Windows release build)
+- `impulse.exe`: Main executable (Windows release build)
 - `config.ini`: Auto-generated configuration file
 - `lib/`: Required DLL dependencies for mouse input
