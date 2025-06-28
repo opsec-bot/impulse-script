@@ -25,7 +25,7 @@ jobs:
       - name: Prepare publish folder
         run: |
           mkdir publish
-          cp target/release/rust-macro.exe publish/
+          cp target/release/impulse.exe publish/
           powershell -Command "Copy-Item -Recurse -Force lib publish/lib"
 
       - name: Zip published output
