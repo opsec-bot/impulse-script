@@ -19,6 +19,8 @@ use winapi::{
     },
 };
 
+use crate::modules::core::logger;
+
 const WDA_EXCLUDEFROMCAPTURE: DWORD = 0x00000011;
 const WDA_NONE: DWORD = 0x00000000;
 
@@ -31,7 +33,7 @@ pub struct ProcessGhost {
 
 impl ProcessGhost {
     pub fn new() -> Self {
-        println!("🚀 Initializing ProcessGhost with advanced DLL injection capabilities");
+        logger::log_debug("Creating new ProcessGhost instance");
         Self {
             window_handle: None,
             is_hidden_from_alt_tab: false,

@@ -1,6 +1,7 @@
 use super::weapon_data::{ DEFAULT_WEAPONS };
 use super::settings::Settings;
 use super::setup_class::Setup;
+use crate::modules::core::logger::{ log_debug };
 
 pub struct SettingsIO {
     pub settings: Settings,
@@ -8,9 +9,11 @@ pub struct SettingsIO {
 
 impl SettingsIO {
     pub fn new() -> Self {
+        log_debug("Initializing SettingsIO");
         let config_path = "./config.ini";
         let mut settings = Settings::new(config_path);
         if !std::path::Path::new(config_path).exists() {
+            log_debug("Config file not found, creating with default values");
             let mut setup = Setup::new(false);
             setup.get_mouse_sensitivity_settings();
 
@@ -36,7 +39,9 @@ impl SettingsIO {
                 settings.update(wep_name, "class", class);
             }
             settings.write();
+            log_debug("Default configuration written to file");
         } else {
+            log_debug("Loading existing configuration file");
             settings.read();
         }
         Self { settings }
@@ -60,6 +65,7 @@ impl SettingsIO {
     }
 
     pub fn set_dpi(&mut self, dpi: i32) {
+        log_debug(&format!("Updating DPI setting to: {}", dpi));
         self.settings.update("GAME", "dpi", dpi);
         self.settings.write();
     }
@@ -101,6 +107,18 @@ impl SettingsIO {
     }
 
     pub fn save_weapon_values(&mut self, wep_name: &str, x: f32, y: f32, xmod: f32, acog: bool) {
+        let scope_suffix = if acog { "_acog" } else { "" };
+        log_debug(
+            &format!(
+                "Saving weapon values for {}{}: X={:.2}, Y={:.2}, Xmod={:.2}",
+                wep_name,
+                scope_suffix,
+                x,
+                y,
+                xmod
+            )
+        );
+
         if acog {
             self.settings.update(wep_name, "X_acog", x);
             self.settings.update(wep_name, "Y_acog", y);

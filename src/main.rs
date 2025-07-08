@@ -1,8 +1,9 @@
-#![windows_subsystem = "windows"] // Comment this line to see console output
+// #![windows_subsystem = "windows"] // Comment this line to see console output
 mod modules;
 
 use imgui::*;
 use modules::input::{ MouseInput, MouseCommand };
+use std::collections::HashMap;
 use std::time::{ Duration, Instant };
 use modules::ui::support;
 use modules::config::{ Setup, SettingsIO, WEAPON_CLASSES };
@@ -13,9 +14,12 @@ use modules::core::{
     HotkeyCommand,
     key_name_to_vk_code,
     ProcessGhost,
+    init_logger,
+    log_debug,
+    log_warning,
+    log_fatal,
+    get_log_file_path,
 };
-
-use std::collections::{ HashMap };
 use std::sync::{ Arc, Mutex, mpsc::{ Sender, Receiver, channel } };
 
 fn calculate_recoil_adjustment(old_sensitivity: i32, new_sensitivity: i32, movement: f32) -> f32 {
@@ -39,6 +43,14 @@ fn update_all_weapon_recoil_for_sensitivity(
         return;
     }
 
+    log_debug(
+        &format!(
+            "Updating all weapon recoil for sensitivity change: {} -> {}",
+            old_sensitivity,
+            new_sensitivity
+        )
+    );
+
     for weapon in all_weapons {
         let (x, y, xmod) = settings_io.get_weapon_values(weapon, false);
         let new_x = calculate_recoil_adjustment(old_sensitivity, new_sensitivity, x);
@@ -55,18 +67,27 @@ fn update_all_weapon_recoil_for_sensitivity(
         }
     }
 
-    println!(
-        "Updated all weapon recoil values for sensitivity change: {} -> {}",
-        old_sensitivity,
-        new_sensitivity
-    );
+    log_debug(&format!("Successfully updated recoil values for {} weapons", all_weapons.len()));
 }
 
 fn main() {
+    // Initialize logging first
+    if let Err(e) = init_logger() {
+        eprintln!("Failed to initialize logger: {}", e);
+    }
+
+    log_debug("Starting Impulse Scripts v1.0.4");
+
+    if let Some(log_path) = get_log_file_path() {
+        log_debug(&format!("Debug output being written to: {}", log_path.display()));
+    }
+
     // --- State Initialization ---
     let mut setup = Setup::new(false);
     setup.get_mouse_sensitivity_settings();
     setup.debug_logging();
+
+    log_debug("Completed setup initialization");
 
     // --- Dynamic Frame Cap State ---
     let mut last_activity = Instant::now();
@@ -78,15 +99,24 @@ fn main() {
 
     // Validate mouse input DLLs
     if !gfck_path.exists() {
-        println!("Warning: GFCK.dll not found at {}", gfck_path.display());
+        log_warning(&format!("GFCK.dll not found at {}", gfck_path.display()));
     }
     if !ghub_path.exists() {
-        println!("Warning: ghub_mouse.dll not found at {}", ghub_path.display());
+        log_warning(&format!("ghub_mouse.dll not found at {}", ghub_path.display()));
     }
 
     let mouse_input = Arc::new(
         Mutex::new(unsafe {
-            MouseInput::new(gfck_path, ghub_path).expect("Failed to load mouse input DLLs")
+            match MouseInput::new(gfck_path, ghub_path) {
+                Ok(input) => {
+                    log_debug("Mouse input system initialized successfully");
+                    input
+                }
+                Err(e) => {
+                    log_fatal(&format!("Failed to load mouse input DLLs: {}", e));
+                    panic!("Failed to load mouse input DLLs: {}", e);
+                }
+            }
         })
     );
     let mut dpi = settings_io.get_dpi();
@@ -218,10 +248,14 @@ fn main() {
             while let Ok(cmd) = hotkey_rx.try_recv() {
                 match cmd {
                     HotkeyCommand::Exit => {
+                        log_debug("Exit hotkey pressed");
                         *should_run = false;
                     }
                     HotkeyCommand::ToggleRcs => {
                         rcs_enabled = !rcs_enabled;
+                        log_debug(
+                            &format!("RCS toggled: {}", if rcs_enabled { "ON" } else { "OFF" })
+                        );
                         if !rcs_enabled {
                             control.reset();
                             println!("RCS toggled: OFF");
@@ -239,23 +273,28 @@ fn main() {
                         }
                     }
                     HotkeyCommand::HideToggle => {
+                        log_debug(
+                            &format!("Ghost mode toggled: {}", if !ghost_mode_active {
+                                "ENABLED"
+                            } else {
+                                "DISABLED"
+                            })
+                        );
                         if ghost_mode_active {
                             let _ = ghost_manager.show_in_alt_tab();
                             let _ = ghost_manager.show_in_screen_capture();
                             window_visible = true;
                             ghost_mode_active = false;
-                            println!("Ghost mode disabled");
                         } else {
                             let _ = ghost_manager.hide_from_alt_tab();
                             let _ = ghost_manager.hide_from_screen_capture();
                             ghost_mode_active = true;
-                            println!("Ghost mode enabled");
                         }
                     }
                     HotkeyCommand::SelectWeapon(weapon_name) => {
                         if rcs_enabled && all_weapons.contains(&weapon_name) {
+                            log_debug(&format!("Weapon selected via hotkey: {}", weapon_name));
                             selected_weapon = Some(weapon_name.clone());
-                            println!("Weapon selected via hotkey: {}", weapon_name);
                         }
                     }
                 }
@@ -902,4 +941,6 @@ fn main() {
                 });
         }
     );
+
+    log_debug("Application shutting down");
 }

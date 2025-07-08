@@ -6,6 +6,8 @@ use std::time::Duration;
 use winapi::um::winuser::{ GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON };
 
 use crate::modules::input::MouseCommand;
+use crate::modules::core::logger::{ log_debug };
+
 struct ControlState {
     stop: bool,
     running: bool,
@@ -30,6 +32,7 @@ pub struct Control {
 
 impl Control {
     pub fn new() -> Self {
+        log_debug("Creating new Control instance");
         Control {
             thread: None,
             state: Arc::new(
@@ -89,6 +92,7 @@ impl Control {
     }
 
     pub fn reset(&mut self) {
+        log_debug("Resetting control state");
         let mut s = self.state.lock().unwrap();
         s.stop = true;
         s.active = false;
@@ -101,16 +105,21 @@ impl Control {
     }
 
     pub fn set_dpi(&mut self, dpi: i32) {
+        log_debug(&format!("Setting DPI to: {}", dpi));
         let mut state = self.state.lock().unwrap();
         state.dpi = dpi;
     }
 
     pub fn set_sensitivity(&mut self, sensitivity: i32) {
+        log_debug(&format!("Setting sensitivity to: {}", sensitivity));
         let mut state = self.state.lock().unwrap();
         state.sensitivity = sensitivity;
     }
 
     pub fn update(&mut self, x: i32, y: i32, t: i32, x_mod: f32) {
+        log_debug(
+            &format!("Updating recoil values: X={}, Y={}, Timing={}ms, Xmod={}", x, y, t, x_mod)
+        );
         self.reset();
         let mut s = self.state.lock().unwrap();
         s.raw_movement_x = x as f32;
@@ -167,6 +176,17 @@ impl ControlState {
 
         let adjusted_x = self.raw_movement_x * sens_scale;
         let adjusted_y = self.raw_movement_y * sens_scale;
+
+        log_debug(
+            &format!(
+                "DPI adjustment: Raw({:.2}, {:.2}) -> Adjusted({}, {}) with sens_scale={:.3}",
+                self.raw_movement_x,
+                self.raw_movement_y,
+                adjusted_x as i32,
+                adjusted_y as i32,
+                sens_scale
+            )
+        );
 
         (adjusted_x.round() as i32, adjusted_y.round() as i32)
     }
