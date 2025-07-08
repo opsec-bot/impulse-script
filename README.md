@@ -2,6 +2,9 @@
 
 Recoil control script built in Rust with ImGui for Rainbow Six Siege X
 
+
+Discord Server: https://discord.gg/pfG39Ekq6T
+
 ## Features
 
 - **ACOG Toggle**: Separate recoil patterns for ACOG (2.5x)
@@ -102,5 +105,4 @@ This software is intended for educational and personal use only. Users are respo
   - [Mouse NoRecoil 1.0 (helpy, auto config)](https://www.unknowncheats.me/forum/rainbow-six-siege/620039-mouse-norecoil-1-0-recoil-helpy-auto-config-probably-ud-universal.html)
   - [R6 Recoil Info / Data Collection (Operators & Attachments)](https://www.unknowncheats.me/forum/rainbow-six-siege/681544-r6-recoil-info-data-collection-operator-attachments.html)
 
----
 ---
