@@ -191,13 +191,13 @@ fn main() {
     let mut prev_acog = false;
 
     support::simple_init_with_resize(
-        "Impusle Scripts v1.0.1",
+        "Impusle Scripts v1.0.4",
         move |should_run, ui, set_window_size| {
             if ghost_manager.window_handle.is_none() {
                 let _ = ghost_manager.find_and_set_window_handle("Impusle Config");
             }
 
-            // Dynamic frame cap logic
+            // Dynamic frame cap
             let idle = last_activity.elapsed() > Duration::from_secs(15);
 
             let current_frame_cap = if rcs_enabled && !idle { 100 } else { 30 };
@@ -406,7 +406,7 @@ fn main() {
                                 add_weapon_popup = true;
                             }
 
-                            // X/Y Sliders for selected weapon
+                            // X/Y/Xmod Sliders for selected weapon
                             if let Some(weapon) = &selected_weapon {
                                 let (x, y, xmod_val) = settings_io.get_weapon_values(
                                     weapon,
@@ -436,15 +436,9 @@ fn main() {
                                 );
 
                                 let mut changed = false;
-                                let mut x_int = x.round() as i32;
-                                let mut y_int = y.round() as i32;
-                                let mut xmod_int = xmod_val.round() as i32;
-                                changed |= ui.slider_config("X", -2, 2).build(&mut x_int);
-                                changed |= ui.slider_config("Y", 1, 10).build(&mut y_int);
-                                changed |= ui.slider_config("Xmod", -1, 2).build(&mut xmod_int);
-                                x = x_int as f32;
-                                y = y_int as f32;
-                                xmod_val = xmod_int as f32;
+                                changed |= ui.slider_config("X", -2.0, 2.0).build(&mut x);
+                                changed |= ui.slider_config("Y", 1.0, 10.0).build(&mut y);
+                                changed |= ui.slider_config("Xmod", -1.0, 2.0).build(&mut xmod_val);
 
                                 if changed {
                                     settings_io.save_weapon_values(

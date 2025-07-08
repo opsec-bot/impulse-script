@@ -148,15 +148,25 @@ impl ControlState {
     }
 
     fn calculate_dpi_adjusted_movement(&self) -> (i32, i32) {
-        if self.sensitivity == 0 || self.dpi == 0 {
+        // Use the user's actual DPI setting - no hardcoded base DPI
+        let base_sensitivity = 30.0;
+
+        if self.dpi == 0 {
             return (self.raw_movement_x as i32, self.raw_movement_y as i32);
         }
 
-        let dpi_scale = 800.0 / (self.dpi as f32);
-        let sens_scale = 30.0 / (self.sensitivity as f32);
+        // No DPI scaling needed - use raw movement as-is since it's already
+        // calibrated for the user's actual DPI setting
 
-        let adjusted_x = self.raw_movement_x * dpi_scale * sens_scale;
-        let adjusted_y = self.raw_movement_y * dpi_scale * sens_scale;
+        // Sensitivity scaling: if we have a sensitivity value, apply it
+        let sens_scale = if self.sensitivity > 0 {
+            base_sensitivity / (self.sensitivity as f32)
+        } else {
+            1.0
+        };
+
+        let adjusted_x = self.raw_movement_x * sens_scale;
+        let adjusted_y = self.raw_movement_y * sens_scale;
 
         (adjusted_x.round() as i32, adjusted_y.round() as i32)
     }
