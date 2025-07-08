@@ -78,10 +78,10 @@ fn main() {
 
     // Validate mouse input DLLs
     if !gfck_path.exists() {
-        println!("⚠️  Warning: GFCK.dll not found at {}", gfck_path.display());
+        println!("Warning: GFCK.dll not found at {}", gfck_path.display());
     }
     if !ghub_path.exists() {
-        println!("⚠️  Warning: ghub_mouse.dll not found at {}", ghub_path.display());
+        println!("Warning: ghub_mouse.dll not found at {}", ghub_path.display());
     }
 
     let mouse_input = Arc::new(
@@ -628,15 +628,6 @@ fn main() {
                                     capturing_hide = false;
                                 }
                             }
-
-                            ui.separator();
-                            ui.text("Ghost Status:");
-                            ui.same_line();
-                            if ghost_mode_active {
-                                ui.text_colored([0.0, 1.0, 0.0, 1.0], "ACTIVE");
-                            } else {
-                                ui.text_colored([1.0, 0.5, 0.0, 1.0], "DISABLED");
-                            }
                             ui.separator();
 
                             // --- Weapon Hotkeys ---
@@ -777,78 +768,10 @@ fn main() {
                                     ui.close_current_popup();
                                 }
                             }
-
-                            ui.separator();
-                            ui.text("Mouse Input Method:");
-                            let mut method = mouse_method;
-                            if
-                                ui.radio_button("GFCK", &mut method, 0) ||
-                                ui.radio_button("GhubMouse", &mut method, 1)
-                            {
-                                mouse_input
-                                    .lock()
-                                    .unwrap()
-                                    .set_current(if method == 0 { "GFCK" } else { "GhubMouse" });
-                                settings_io.settings.update("MOUSE", "method", if method == 0 {
-                                    "GFCK"
-                                } else {
-                                    "GhubMouse"
-                                });
-                                settings_io.settings.write();
-                                println!(
-                                    "Switched mouse input method to: {}",
-                                    mouse_input.lock().unwrap().get_current_name()
-                                );
-                                mouse_method = method;
-                            }
                         }
 
                         // --- Settings Tab ---
                         if let Some(_tab_item_token) = ui.tab_item("Settings") {
-                            if ui.button("Auto-import from GameSettings.ini") {
-                                let old_sens = sens;
-
-                                setup.get_mouse_sensitivity_settings();
-                                fov = setup.get_fov() as i32;
-                                sens = setup.get_sensitivity() as i32;
-                                sens_1x = setup.get_sensitivity_modifier_1() as i32;
-                                sens_25x = setup.get_sensitivity_modifier_25() as i32;
-
-                                settings_io.settings.update("GAME", "fov", fov);
-                                settings_io.settings.update("GAME", "sens", sens);
-                                settings_io.settings.update("GAME", "sens_1x", sens_1x);
-                                settings_io.settings.update("GAME", "sens_25x", sens_25x);
-                                control.set_sensitivity(sens);
-
-                                if old_sens != sens && old_sens != 0 {
-                                    update_all_weapon_recoil_for_sensitivity(
-                                        &mut settings_io,
-                                        old_sens,
-                                        sens,
-                                        &all_weapons
-                                    );
-
-                                    if rcs_enabled {
-                                        if let Some(weapon) = &selected_weapon {
-                                            let (x, y, xmod_val) = settings_io.get_weapon_values(
-                                                weapon,
-                                                acog_enabled
-                                            );
-                                            let rpm = weapon_rpm
-                                                .get(weapon)
-                                                .copied()
-                                                .unwrap_or(600) as f32;
-                                            let timing = (4234.44 / rpm + 2.58).round() as i32;
-                                            control.update(x as i32, y as i32, timing, xmod_val);
-                                        }
-                                    }
-                                }
-
-                                previous_sensitivity = sens;
-                            }
-
-                            ui.separator();
-
                             if ui.input_int("DPI", &mut dpi).build() {
                                 settings_io.set_dpi(dpi);
                                 control.set_dpi(dpi);
@@ -898,15 +821,88 @@ fn main() {
                                 settings_io.settings.update("GAME", "sens_25x", sens_25x);
                                 settings_io.settings.write();
                             }
+
+                            if ui.button("Auto-import from GameSettings.ini") {
+                                let old_sens = sens;
+
+                                setup.get_mouse_sensitivity_settings();
+                                fov = setup.get_fov() as i32;
+                                sens = setup.get_sensitivity() as i32;
+                                sens_1x = setup.get_sensitivity_modifier_1() as i32;
+                                sens_25x = setup.get_sensitivity_modifier_25() as i32;
+
+                                settings_io.settings.update("GAME", "fov", fov);
+                                settings_io.settings.update("GAME", "sens", sens);
+                                settings_io.settings.update("GAME", "sens_1x", sens_1x);
+                                settings_io.settings.update("GAME", "sens_25x", sens_25x);
+                                control.set_sensitivity(sens);
+
+                                if old_sens != sens && old_sens != 0 {
+                                    update_all_weapon_recoil_for_sensitivity(
+                                        &mut settings_io,
+                                        old_sens,
+                                        sens,
+                                        &all_weapons
+                                    );
+
+                                    if rcs_enabled {
+                                        if let Some(weapon) = &selected_weapon {
+                                            let (x, y, xmod_val) = settings_io.get_weapon_values(
+                                                weapon,
+                                                acog_enabled
+                                            );
+                                            let rpm = weapon_rpm
+                                                .get(weapon)
+                                                .copied()
+                                                .unwrap_or(600) as f32;
+                                            let timing = (4234.44 / rpm + 2.58).round() as i32;
+                                            control.update(x as i32, y as i32, timing, xmod_val);
+                                        }
+                                    }
+                                }
+
+                                previous_sensitivity = sens;
+                            }
+
+                            ui.separator();
+                            ui.text("Mouse Input Method:");
+                            let mut method = mouse_method;
+                            if
+                                ui.radio_button("GFCK", &mut method, 0) ||
+                                ui.radio_button("GhubMouse", &mut method, 1)
+                            {
+                                mouse_input
+                                    .lock()
+                                    .unwrap()
+                                    .set_current(if method == 0 { "GFCK" } else { "GhubMouse" });
+                                settings_io.settings.update("MOUSE", "method", if method == 0 {
+                                    "GFCK"
+                                } else {
+                                    "GhubMouse"
+                                });
+                                settings_io.settings.write();
+                                println!(
+                                    "Switched mouse input method to: {}",
+                                    mouse_input.lock().unwrap().get_current_name()
+                                );
+                                mouse_method = method;
+                            }
                         }
 
-                        // --- About Tab ---
-                        if let Some(_tab_item_token) = ui.tab_item("About") {
-                            ui.text("Developed by github.com/opsec-bot");
+                        // --- Extras Tab ---
+                        if let Some(_tab_item_token) = ui.tab_item("Extras") {
+                            ui.text("Developed by credit132 on unknowncheats.me");
                             ui.separator();
                             ui.text("Program Information:");
                             let fps = ui.io().framerate;
                             ui.text(format!("FPS: {:.1}", fps));
+                            ui.text("Ghost Status:");
+                            ui.same_line();
+                            if ghost_mode_active {
+                                ui.text_colored([0.0, 1.0, 0.0, 1.0], "ACTIVE");
+                            } else {
+                                ui.text_colored([1.0, 0.5, 0.0, 1.0], "DISABLED");
+                            }
                         }
                     }
                 });
