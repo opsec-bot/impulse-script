@@ -1,9 +1,8 @@
-use std::{ env, fs::{ self }, path::{ Path, PathBuf } };
+use std::{ path::{ Path, PathBuf } };
 
 use configparser::ini::Ini;
 use glob::glob;
 pub struct Setup {
-    debug: bool,
     config: Ini,
     sensitivity_x: i32,
     sensitivity_y: i32,
@@ -16,20 +15,16 @@ pub struct Setup {
     fov: i32,
     x_factor: f32,
     config_location: Option<PathBuf>,
-    user_settings_path: PathBuf,
 }
 
 impl Setup {
-    pub fn new(debug: bool) -> Self {
+    pub fn new() -> Self {
         let user_document_folder = Self::get_user_document_folder();
         let config_location = Self::get_game_settings_file(&user_document_folder);
-        let appdata_dir = PathBuf::from(env::var("APPDATA").unwrap());
-        let user_settings_path = appdata_dir.join("RCS");
 
         let config = Ini::new();
 
         Self {
-            debug,
             config,
             sensitivity_x: 0,
             sensitivity_y: 0,
@@ -42,7 +37,6 @@ impl Setup {
             fov: 0,
             x_factor: 0.0,
             config_location,
-            user_settings_path,
         }
     }
 
@@ -60,7 +54,6 @@ impl Setup {
             .filter(|p| p.exists())
             .collect();
 
-
         ini_files.sort_by_key(|p| {
             std::fs
                 ::metadata(p)
@@ -72,10 +65,7 @@ impl Setup {
 
     pub fn get_mouse_sensitivity_settings(&mut self) {
         if let Some(ref config_path) = self.config_location {
-            if let Err(e) = self.config.load(config_path) {
-                if self.debug {
-                    eprintln!("Failed to load GameSettings.ini: {:?}", e);
-                }
+            if let Err(_) = self.config.load(config_path) {
                 return;
             }
 
@@ -119,30 +109,7 @@ impl Setup {
                 .unwrap()
                 .unwrap_or(0.0) as f32;
             self.fov = self.config.getfloat(display, "DefaultFOV").unwrap().unwrap_or(0.0) as i32;
-        } else if self.debug {
-            eprintln!("No GameSettings.ini found in expected location.");
         }
-    }
-
-    pub fn debug_logging(&self) {
-        if !self.debug {
-            return;
-        }
-        println!(
-            "Location: {:?}\nSENSITIVITY[X,Y]: ({}, {})\nFOV: {}\nxFactor: {}\n1x: {}\n1.5x: {}\n2x: {}\n2.5x: {}\n3x: {}\n4x: {}",
-            self.config_location,
-            self.sensitivity_x,
-            self.sensitivity_y,
-            self.fov,
-            self.x_factor,
-            self.sensitivity_modifier_1,
-            self.sensitivity_modifier_15,
-            self.sensitivity_modifier_2,
-            self.sensitivity_modifier_25,
-            self.sensitivity_modifier_3,
-            self.sensitivity_modifier_4
-        );
-        let _ = fs::remove_file(self.user_settings_path.join("user.ini"));
     }
 
     pub fn get_fov(&self) -> f32 {

@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::sync::{ Arc, Mutex };
-use winapi::um::winuser::{ GetAsyncKeyState, VK_END, VK_F1, VK_F2 };
+use winapi::um::winuser::{ GetAsyncKeyState, VK_END, VK_F1, VK_F2, VK_F3 };
 
 pub enum HotkeyCommand {
     Exit,
     ToggleRcs,
     HideToggle,
+    AlwaysOnTopToggle,
     SelectWeapon(String),
 }
 
@@ -15,6 +16,7 @@ pub struct HotkeyHandler {
     exit_key: i32,
     toggle_key: i32,
     hide_key: i32,
+    always_on_top_key: i32,
     sender: Option<Sender<HotkeyCommand>>,
     prev_states: HashMap<i32, bool>,
 }
@@ -26,6 +28,7 @@ impl HotkeyHandler {
             exit_key: VK_END,
             toggle_key: VK_F1,
             hide_key: VK_F2,
+            always_on_top_key: VK_F3,
             sender: None,
             prev_states: HashMap::new(),
         }
@@ -45,6 +48,10 @@ impl HotkeyHandler {
 
     pub fn set_hide_key(&mut self, key_code: i32) {
         self.hide_key = key_code;
+    }
+
+    pub fn set_always_on_top_key(&mut self, key_code: i32) {
+        self.always_on_top_key = key_code;
     }
 
     pub fn bind_weapon(&mut self, key_code: i32, weapon_name: String) {
@@ -70,6 +77,11 @@ impl HotkeyHandler {
             let sender_clone = sender.clone();
             self.check_key_press(self.hide_key, move || {
                 let _ = sender_clone.send(HotkeyCommand::HideToggle);
+            });
+
+            let sender_clone = sender.clone();
+            self.check_key_press(self.always_on_top_key, move || {
+                let _ = sender_clone.send(HotkeyCommand::AlwaysOnTopToggle);
             });
 
             let bindings = self.weapon_bindings.lock().unwrap().clone();

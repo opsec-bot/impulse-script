@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"] // Comment this line to see console output
+// #![windows_subsystem = "windows"] // Comment this line to see console output
 mod modules;
 
 use imgui::*;
@@ -83,9 +83,8 @@ fn main() {
     }
 
     // --- State Initialization ---
-    let mut setup = Setup::new(false);
+    let mut setup = Setup::new();
     setup.get_mouse_sensitivity_settings();
-    setup.debug_logging();
 
     log_debug("Completed setup initialization");
 
@@ -194,6 +193,13 @@ fn main() {
     {
         hotkey_handler.set_hide_key(hide_key);
     }
+    if
+        let Some(always_on_top_key) = settings_io
+            .get_profile_hotkey("always_on_top")
+            .and_then(|k| key_name_to_vk_code(&k))
+    {
+        hotkey_handler.set_always_on_top_key(always_on_top_key);
+    }
 
     for (weapon, key_name) in settings_io.get_all_weapon_hotkeys() {
         if let Some(key_code) = key_name_to_vk_code(&key_name) {
@@ -205,10 +211,12 @@ fn main() {
     let mut rcs_enabled = false;
     let mut window_visible = true;
     let mut ghost_mode_active = false;
+    let mut always_on_top_active = false;
 
     let mut capturing_exit = false;
     let mut capturing_toggle = false;
     let mut capturing_hide = false;
+    let mut capturing_always_on_top = false;
     let mut capturing_hotkey = false;
     let mut capturing_rebind = false;
     let mut rebinding_weapon: Option<String> = None;
@@ -258,7 +266,6 @@ fn main() {
                         );
                         if !rcs_enabled {
                             control.reset();
-                            println!("RCS toggled: OFF");
                         } else {
                             if let Some(weapon) = &selected_weapon {
                                 let (x, y, xmod_val) = settings_io.get_weapon_values(
@@ -269,7 +276,6 @@ fn main() {
                                 let timing = (4234.44 / rpm + 2.58).round() as i32;
                                 control.update(x as i32, y as i32, timing, xmod_val);
                             }
-                            println!("RCS toggled: ON");
                         }
                     }
                     HotkeyCommand::HideToggle => {
@@ -290,6 +296,17 @@ fn main() {
                             let _ = ghost_manager.hide_from_screen_capture();
                             ghost_mode_active = true;
                         }
+                    }
+                    HotkeyCommand::AlwaysOnTopToggle => {
+                        always_on_top_active = !always_on_top_active;
+                        log_debug(
+                            &format!("Always on top toggled: {}", if always_on_top_active {
+                                "ENABLED"
+                            } else {
+                                "DISABLED"
+                            })
+                        );
+                        let _ = ghost_manager.set_always_on_top(always_on_top_active);
                     }
                     HotkeyCommand::SelectWeapon(weapon_name) => {
                         if rcs_enabled && all_weapons.contains(&weapon_name) {
@@ -558,7 +575,7 @@ fn main() {
 
                         // --- Hotkeys Tab ---
                         if let Some(_tab_item_token) = ui.tab_item("Hotkeys") {
-                            ui.text("Exit Hotkey:");
+                            ui.text("Exit:");
 
                             ui.same_line();
                             if ui.button(&format!("Current: {}", exit_hotkey)) {
@@ -594,7 +611,7 @@ fn main() {
                                 .get_profile_hotkey("toggle")
                                 .unwrap_or_else(|| "F1".to_string());
 
-                            ui.text("Toggle RCS Hotkey:");
+                            ui.text("Toggle Script:");
 
                             ui.same_line();
                             if ui.button(&format!("Current: {}", toggle_hotkey)) {
@@ -630,7 +647,7 @@ fn main() {
                                 .get_profile_hotkey("hide")
                                 .unwrap_or_else(|| "F2".to_string());
 
-                            ui.text("Ghost Mode Hotkey:");
+                            ui.text("Ghost Mode:");
 
                             ui.same_line();
                             if ui.button(&format!("Current: {}", hide_hotkey)) {
@@ -659,6 +676,49 @@ fn main() {
                                         hotkey_handler.set_hide_key(key_code);
                                     }
                                     capturing_hide = false;
+                                }
+                            }
+
+                            let mut always_on_top_hotkey = settings_io
+                                .get_profile_hotkey("always_on_top")
+                                .unwrap_or_else(|| "F3".to_string());
+
+                            ui.text("Top most:");
+
+                            ui.same_line();
+                            if ui.button(&format!("Current: {}", always_on_top_hotkey)) {
+                                capturing_always_on_top = true;
+                            }
+
+                            if capturing_always_on_top {
+                                ui.same_line();
+                                ui.text("Press a key (ESC to clear)...");
+                                if
+                                    let Some((imgui_key, _)) = ui
+                                        .io()
+                                        .keys_down.iter()
+                                        .enumerate()
+                                        .find(|&(_, &down)| down)
+                                {
+                                    if imgui_key == (imgui::Key::Escape as usize) {
+                                        always_on_top_hotkey = "None".to_string();
+                                    } else {
+                                        always_on_top_hotkey = modules::ui::keybinds
+                                            ::imgui_key_to_name(imgui_key as u32)
+                                            .to_string();
+                                    }
+                                    settings_io.save_profile_hotkey(
+                                        "always_on_top",
+                                        &always_on_top_hotkey
+                                    );
+                                    if
+                                        let Some(key_code) = key_name_to_vk_code(
+                                            &always_on_top_hotkey
+                                        )
+                                    {
+                                        hotkey_handler.set_always_on_top_key(key_code);
+                                    }
+                                    capturing_always_on_top = false;
                                 }
                             }
                             ui.separator();
@@ -914,9 +974,11 @@ fn main() {
                                     "GhubMouse"
                                 });
                                 settings_io.settings.write();
-                                println!(
-                                    "Switched mouse input method to: {}",
-                                    mouse_input.lock().unwrap().get_current_name()
+                                log_debug(
+                                    &format!(
+                                        "Switched mouse input method to: {}",
+                                        mouse_input.lock().unwrap().get_current_name()
+                                    )
                                 );
                                 mouse_method = method;
                             }
@@ -932,6 +994,13 @@ fn main() {
                             ui.text("Ghost Status:");
                             ui.same_line();
                             if ghost_mode_active {
+                                ui.text_colored([0.0, 1.0, 0.0, 1.0], "ACTIVE");
+                            } else {
+                                ui.text_colored([1.0, 0.5, 0.0, 1.0], "DISABLED");
+                            }
+                            ui.text("Always On Top:");
+                            ui.same_line();
+                            if always_on_top_active {
                                 ui.text_colored([0.0, 1.0, 0.0, 1.0], "ACTIVE");
                             } else {
                                 ui.text_colored([1.0, 0.5, 0.0, 1.0], "DISABLED");

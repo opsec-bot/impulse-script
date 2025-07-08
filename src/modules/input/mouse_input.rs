@@ -132,12 +132,6 @@ impl<'a> MouseInput {
     }
 
     pub fn move_relative(&self, x: c_int, y: c_int) {
-        println!(
-            "[MouseInput] move_relative called with x: {}, y: {}, method: {}",
-            x,
-            y,
-            self.get_current_name()
-        );
         match self.current {
             InputMethodEnum::GFCK => {
                 if let Some(gfck) = &self.gfck {

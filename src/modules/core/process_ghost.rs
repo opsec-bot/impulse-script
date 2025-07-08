@@ -11,9 +11,14 @@ use winapi::{
             FindWindowW,
             EnumWindows,
             GetWindowThreadProcessId,
+            SetWindowPos,
             GWL_EXSTYLE,
             WS_EX_APPWINDOW,
             WS_EX_TOOLWINDOW,
+            HWND_TOPMOST,
+            HWND_NOTOPMOST,
+            SWP_NOMOVE,
+            SWP_NOSIZE,
         },
         processthreadsapi::GetCurrentProcessId,
     },
@@ -28,6 +33,7 @@ pub struct ProcessGhost {
     pub window_handle: Option<HWND>,
     is_hidden_from_alt_tab: bool,
     is_hidden_from_capture: bool,
+    is_always_on_top: bool,
     current_process_id: u32,
 }
 
@@ -38,6 +44,7 @@ impl ProcessGhost {
             window_handle: None,
             is_hidden_from_alt_tab: false,
             is_hidden_from_capture: false,
+            is_always_on_top: false,
             current_process_id: Self::get_current_process_id_internal(),
         }
     }
@@ -232,6 +239,49 @@ impl ProcessGhost {
                 Ok(())
             } else {
                 Err("No windows found to restore to screen capture".to_string())
+            }
+        }
+
+        #[cfg(not(windows))]
+        Err("Windows API not available on this platform".to_string())
+    }
+
+    pub fn set_always_on_top(&mut self, enabled: bool) -> Result<(), String> {
+        #[cfg(windows)]
+        unsafe {
+            let current_pid = self.current_process_id;
+            let mut success_count = 0;
+
+            unsafe extern "system" fn enum_windows_proc(hwnd: HWND, lparam: isize) -> BOOL {
+                unsafe {
+                    let context = lparam as *mut (u32, bool, *mut i32);
+                    let (target_pid, enabled, success_count_ptr) = *context;
+
+                    let mut process_id: DWORD = 0;
+                    GetWindowThreadProcessId(hwnd, &mut process_id);
+
+                    if process_id == target_pid {
+                        let hwnd_flag = if enabled { HWND_TOPMOST } else { HWND_NOTOPMOST };
+                        if SetWindowPos(hwnd, hwnd_flag, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE) != 0 {
+                            *success_count_ptr += 1;
+                        }
+                    }
+
+                    TRUE
+                }
+            }
+
+            let mut context = (current_pid, enabled, &mut success_count as *mut i32);
+            EnumWindows(Some(enum_windows_proc), &mut context as *mut _ as isize);
+
+            if success_count > 0 {
+                self.is_always_on_top = enabled;
+                logger::log_debug(
+                    &format!("Always on top {}", if enabled { "enabled" } else { "disabled" })
+                );
+                Ok(())
+            } else {
+                Err("No windows found to modify always-on-top state".to_string())
             }
         }
 

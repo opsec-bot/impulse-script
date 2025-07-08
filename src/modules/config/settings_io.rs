@@ -14,7 +14,7 @@ impl SettingsIO {
         let mut settings = Settings::new(config_path);
         if !std::path::Path::new(config_path).exists() {
             log_debug("Config file not found, creating with default values");
-            let mut setup = Setup::new(false);
+            let mut setup = Setup::new();
             setup.get_mouse_sensitivity_settings();
 
             let initial_settings = [
@@ -25,6 +25,9 @@ impl SettingsIO {
                 ("GAME", "dpi", "800".to_string()),
                 ("MOUSE", "method", "GFCK".to_string()),
                 ("RCS_HOTKEY", "exit", "END".to_string()),
+                ("RCS_HOTKEY", "toggle", "F1".to_string()),
+                ("RCS_HOTKEY", "hide", "F2".to_string()),
+                ("RCS_HOTKEY", "always_on_top", "F3".to_string()),
             ];
 
             for (section, key, value) in initial_settings {
