@@ -87,6 +87,8 @@ cd impulse-script
 cargo build --release
 ```
 
+Ensure that the lib and output executable are in the same folder.
+
 ## Contributing
 
 1. Fork the repository
