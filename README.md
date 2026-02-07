@@ -2,9 +2,6 @@
 
 Recoil control script built in Rust with ImGui for Rainbow Six Siege X
 
-
-Discord Server: https://discord.gg/pfG39Ekq6T
-
 ## Features
 
 - **ACOG Toggle**: Separate recoil patterns for ACOG (2.5x)
