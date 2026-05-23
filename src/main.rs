@@ -4,7 +4,7 @@ mod modules;
 use imgui::*;
 use modules::input::MouseInput;
 use std::collections::HashMap;
-use std::time::{ Duration, Instant };
+use std::time::Duration;
 use modules::ui::support;
 use modules::config::{ Setup, SettingsIO, WEAPON_CLASSES };
 use modules::core::{
@@ -114,9 +114,6 @@ fn main() {
     setup.get_mouse_sensitivity_settings();
 
     log_debug("Completed setup initialization");
-
-    // --- Dynamic Frame Cap State ---
-    let last_activity = Instant::now();
 
     let mut settings_io = SettingsIO::new();
 
@@ -272,12 +269,8 @@ fn main() {
                 let _ = ghost_manager.find_and_set_window_handle("Impusle Config");
             }
 
-            // Dynamic frame cap
-            let idle = last_activity.elapsed() > Duration::from_secs(15);
-
-            let current_frame_cap = if rcs_enabled && !idle { 100 } else { 30 };
-            let frame_time = Duration::from_secs_f32(1.0 / (current_frame_cap as f32));
-            std::thread::sleep(frame_time);
+            // Fixed UI frame cap — the heavy work happens in the control thread.
+            std::thread::sleep(Duration::from_secs_f32(1.0 / 60.0));
 
             let window_flags =
                 WindowFlags::NO_RESIZE |
