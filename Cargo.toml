@@ -32,7 +32,8 @@ features = [
     "consoleapi",
     "synchapi",
     "errhandlingapi",
-    "wow64apiset"
+    "wow64apiset",
+    "timeapi"
 ]
 
 [profile.release]

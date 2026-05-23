@@ -1,12 +1,25 @@
-use std::sync::{ Arc, Mutex, mpsc::Sender };
+use std::hint::spin_loop;
+use std::sync::{ Arc, Mutex };
 use std::thread::{ self, JoinHandle };
-use std::time::Duration;
+use std::time::{ Duration, Instant };
 
 #[cfg(windows)]
 use winapi::um::winuser::{ GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON };
 
-use crate::modules::input::MouseCommand;
+use crate::modules::input::MouseInput;
 use crate::modules::core::logger::{ log_debug };
+
+fn precise_sleep(duration: Duration) {
+    let start = Instant::now();
+
+    if duration > Duration::from_millis(2) {
+        thread::sleep(duration - Duration::from_millis(1));
+    }
+
+    while start.elapsed() < duration {
+        spin_loop();
+    }
+}
 
 struct ControlState {
     stop: bool,
@@ -27,7 +40,7 @@ struct ControlState {
 pub struct Control {
     thread: Option<JoinHandle<()>>,
     state: Arc<Mutex<ControlState>>,
-    sender: Option<Sender<MouseCommand>>,
+    mouse_input: Option<Arc<MouseInput>>,
 }
 
 impl Control {
@@ -52,40 +65,80 @@ impl Control {
                     raw_movement_y: 0.0,
                 })
             ),
-            sender: None,
+            mouse_input: None,
         }
     }
 
-    pub fn set_sender(&mut self, sender: Sender<MouseCommand>) {
-        self.sender = Some(sender);
+    pub fn set_mouse_input(&mut self, mouse_input: Arc<MouseInput>) {
+        self.mouse_input = Some(mouse_input);
     }
 
     pub fn run_threaded(&mut self) {
         let state = Arc::clone(&self.state);
-        let sender = self.sender.clone();
+        let mouse_input = match self.mouse_input.clone() {
+            Some(mouse_input) => mouse_input,
+            None => return,
+        };
         {
             let mut s = state.lock().unwrap();
             s.running = true;
         }
         self.thread = Some(
             thread::spawn(move || {
-                while state.lock().unwrap().running {
-                    {
+                loop {
+                    let (running, active, stop, timing, x, y) = {
                         let mut s = state.lock().unwrap();
-                        s.check_status();
-                        if !s.active {
-                            drop(s);
-                            thread::sleep(Duration::from_millis(50));
-                            continue;
-                        }
-                        if !s.stop {
-                            if let Some(ref sender) = sender {
-                                let (x, y) = s.calculate_dpi_adjusted_movement();
-                                sender.send(MouseCommand::Move(x, y)).ok();
+
+                        if !s.running {
+                            (false, false, false, 0.0, 0, 0)
+                        } else {
+                            s.check_status();
+
+                            let active = s.active;
+                            let stop = s.stop;
+                            let timing = s.timing;
+
+                            if active && !stop {
+                                // Recompute per shot so live DPI / sensitivity changes
+                                // apply without waiting for the next update() call.
+                                let (mut x, y) = s.calculate_dpi_adjusted_movement();
+
+                                match s.move_x_modifier as i32 {
+                                    -1 => {
+                                        x *= s.x_flip;
+                                        s.x_flip *= -1;
+                                    }
+                                    0 => {
+                                        if s.x_once_done {
+                                            x = 0;
+                                        } else {
+                                            s.x_once_done = true;
+                                        }
+                                    }
+                                    1 => {}
+                                    _ => {
+                                        x = ((x as f32) * s.move_x_modifier) as i32;
+                                    }
+                                }
+
+                                (true, active, stop, timing, x, y)
+                            } else {
+                                (true, active, stop, timing, 0, 0)
                             }
-                            std::thread::sleep(Duration::from_secs_f32(s.timing));
                         }
+                    };
+
+                    if !running {
+                        break;
                     }
+
+                    if !active || stop {
+                        precise_sleep(Duration::from_millis(1));
+                        continue;
+                    }
+
+                    mouse_input.move_relative(x, y);
+                    precise_sleep(Duration::from_secs_f32(timing));
                 }
             })
         );
@@ -100,6 +153,8 @@ impl Control {
         s.move_y = 0;
         s.timing = 0.0;
         s.move_x_modifier = 1.0;
+        s.x_flip = 1;
+        s.x_once_done = false;
         s.raw_movement_x = 0.0;
         s.raw_movement_y = 0.0;
     }
@@ -120,27 +175,25 @@ impl Control {
         log_debug(
             &format!("Updating recoil values: X={}, Y={}, Timing={}ms, Xmod={}", x, y, t, x_mod)
         );
-        self.reset();
         let mut s = self.state.lock().unwrap();
+        s.stop = true;
+        s.active = false;
+        s.move_x = 0;
+        s.move_y = 0;
+        s.x_flip = 1;
+        s.x_once_done = false;
         s.raw_movement_x = x as f32;
         s.raw_movement_y = y as f32;
         s.timing = (t as f32) / 1000.0;
         s.move_x_modifier = x_mod;
-        s.x_flip = 1;
-        s.x_once_done = false;
 
         let (adjusted_x, adjusted_y) = s.calculate_dpi_adjusted_movement();
         s.move_x = adjusted_x;
         s.move_y = adjusted_y;
 
-        s.current(true);
         s.stop = false;
     }
 
-    pub fn current(&self, debug: bool) -> (i32, i32, f32, f32) {
-        let s = self.state.lock().unwrap();
-        s.current(debug)
-    }
 }
 
 impl ControlState {
@@ -172,30 +225,7 @@ impl ControlState {
         let adjusted_x = self.raw_movement_x * sens_scale;
         let adjusted_y = self.raw_movement_y * sens_scale;
 
-        log_debug(
-            &format!(
-                "DPI adjustment: Raw({:.2}, {:.2}) -> Adjusted({}, {}) with sens_scale={:.3}",
-                self.raw_movement_x,
-                self.raw_movement_y,
-                adjusted_x as i32,
-                adjusted_y as i32,
-                sens_scale
-            )
-        );
-
         (adjusted_x.round() as i32, adjusted_y.round() as i32)
     }
 
-    fn current(&self, debug: bool) -> (i32, i32, f32, f32) {
-        if debug {
-            println!(
-                "current values: ({}, {}, {:.5}, {})",
-                self.move_x,
-                self.move_y,
-                self.timing,
-                self.move_x_modifier
-            );
-        }
-        (self.move_x, self.move_y, self.timing, self.move_x_modifier)
-    }
 }

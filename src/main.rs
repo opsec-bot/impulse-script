@@ -2,14 +2,13 @@
 mod modules;
 
 use imgui::*;
-use modules::input::{ MouseInput, MouseCommand };
+use modules::input::MouseInput;
 use std::collections::HashMap;
 use std::time::{ Duration, Instant };
 use modules::ui::support;
 use modules::config::{ Setup, SettingsIO, WEAPON_CLASSES };
 use modules::core::{
     Control,
-    XmodState,
     HotkeyHandler,
     HotkeyCommand,
     key_name_to_vk_code,
@@ -20,7 +19,32 @@ use modules::core::{
     log_fatal,
     get_log_file_path,
 };
-use std::sync::{ Arc, Mutex, mpsc::{ Sender, Receiver, channel } };
+use std::sync::{ Arc, mpsc::{ Sender, Receiver, channel } };
+
+#[cfg(windows)]
+use winapi::um::timeapi::{ timeBeginPeriod, timeEndPeriod };
+
+#[cfg(windows)]
+struct TimePeriodGuard;
+
+#[cfg(windows)]
+impl TimePeriodGuard {
+    fn new() -> Self {
+        unsafe {
+            timeBeginPeriod(1);
+        }
+        Self
+    }
+}
+
+#[cfg(windows)]
+impl Drop for TimePeriodGuard {
+    fn drop(&mut self) {
+        unsafe {
+            timeEndPeriod(1);
+        }
+    }
+}
 
 fn calculate_recoil_adjustment(old_sensitivity: i32, new_sensitivity: i32, movement: f32) -> f32 {
     if new_sensitivity == 0 {
@@ -82,6 +106,9 @@ fn main() {
         log_debug(&format!("Debug output being written to: {}", log_path.display()));
     }
 
+    #[cfg(windows)]
+    let _time_period_guard = TimePeriodGuard::new();
+
     // --- State Initialization ---
     let mut setup = Setup::new();
     setup.get_mouse_sensitivity_settings();
@@ -89,7 +116,7 @@ fn main() {
     log_debug("Completed setup initialization");
 
     // --- Dynamic Frame Cap State ---
-    let mut last_activity = Instant::now();
+    let last_activity = Instant::now();
 
     let mut settings_io = SettingsIO::new();
 
@@ -104,20 +131,24 @@ fn main() {
         log_warning(&format!("ghub_mouse.dll not found at {}", ghub_path.display()));
     }
 
-    let mouse_input = Arc::new(
-        Mutex::new(unsafe {
-            match MouseInput::new(gfck_path, ghub_path) {
-                Ok(input) => {
-                    log_debug("Mouse input system initialized successfully");
-                    input
-                }
-                Err(e) => {
-                    log_fatal(&format!("Failed to load mouse input DLLs: {}", e));
-                    panic!("Failed to load mouse input DLLs: {}", e);
-                }
+    let mouse_input = Arc::new(unsafe {
+        match MouseInput::new(gfck_path, ghub_path) {
+            Ok(input) => {
+                log_debug("Mouse input system initialized successfully");
+                input
             }
-        })
-    );
+            Err(e) => {
+                log_fatal(&format!("Failed to load mouse input DLLs: {}", e));
+                panic!("Failed to load mouse input DLLs: {}", e);
+            }
+        }
+    });
+
+    // Apply persisted mouse method preference (default GFCK if missing/unknown)
+    if let Some(saved_method) = settings_io.settings.get("MOUSE", "method") {
+        mouse_input.set_current(&saved_method);
+    }
+
     let mut dpi = settings_io.get_dpi();
 
     // --- Weapon/Hotkey State ---
@@ -145,6 +176,15 @@ fn main() {
     let mut exit_hotkey = settings_io
         .get_profile_hotkey("exit")
         .unwrap_or_else(|| "None".to_string());
+    let mut toggle_hotkey = settings_io
+        .get_profile_hotkey("toggle")
+        .unwrap_or_else(|| "F1".to_string());
+    let mut hide_hotkey = settings_io
+        .get_profile_hotkey("hide")
+        .unwrap_or_else(|| "F2".to_string());
+    let mut always_on_top_hotkey = settings_io
+        .get_profile_hotkey("always_on_top")
+        .unwrap_or_else(|| "F3".to_string());
     let mut mouse_method = match settings_io.settings.get("MOUSE", "method").as_deref() {
         Some("GhubMouse") => 1,
         _ => 0,
@@ -156,14 +196,12 @@ fn main() {
     let mut previous_sensitivity = sens;
     let mut sens_1x = setup.get_sensitivity_modifier_1() as i32;
     let mut sens_25x = setup.get_sensitivity_modifier_25() as i32;
-    let (tx, rx): (Sender<MouseCommand>, Receiver<MouseCommand>) = channel();
-
     // --- Hotkey Command Channel ---
     let (hotkey_tx, hotkey_rx): (Sender<HotkeyCommand>, Receiver<HotkeyCommand>) = channel();
 
     // --- Control Handler State ---
     let mut control = Control::new();
-    control.set_sender(tx);
+    control.set_mouse_input(Arc::clone(&mouse_input));
     control.set_dpi(dpi);
     control.set_sensitivity(sens);
     control.run_threaded();
@@ -224,7 +262,6 @@ fn main() {
     let mut ghost_manager = ProcessGhost::new();
 
     // --- ImGui Main Loop ---
-    let mut xmod_state = XmodState { x_flip: 1, x_once_done: false };
     let mut prev_weapon: Option<String> = None;
     let mut prev_acog = false;
 
@@ -314,43 +351,6 @@ fn main() {
                             selected_weapon = Some(weapon_name.clone());
                         }
                     }
-                }
-            }
-
-            while let Ok(cmd) = rx.try_recv() {
-                match cmd {
-                    MouseCommand::Move(mut x, y) => {
-                        last_activity = Instant::now();
-                        if rcs_enabled {
-                            if let Some(selected) = selected_weapon.as_ref() {
-                                let (_, _, xmod_val) = settings_io.get_weapon_values(
-                                    selected,
-                                    acog_enabled
-                                );
-                                match xmod_val as i32 {
-                                    -1 => {
-                                        x *= xmod_state.x_flip;
-                                        xmod_state.x_flip *= -1;
-                                    }
-                                    0 => {
-                                        if xmod_state.x_once_done {
-                                            x = 0;
-                                        } else {
-                                            xmod_state.x_once_done = true;
-                                        }
-                                    }
-                                    1 => {}
-                                    _ => {
-                                        x = ((x as f32) * xmod_val) as i32;
-                                    }
-                                }
-                                mouse_input.lock().unwrap().move_relative(x, y);
-                            }
-                        }
-                    }
-                    MouseCommand::Click(b) => mouse_input.lock().unwrap().click(b),
-                    MouseCommand::Down(b) => mouse_input.lock().unwrap().down(b),
-                    MouseCommand::Up(b) => mouse_input.lock().unwrap().up(b),
                 }
             }
 
@@ -470,8 +470,6 @@ fn main() {
                                 );
 
                                 if prev_weapon != Some(weapon.clone()) || prev_acog != acog_enabled {
-                                    xmod_state.x_flip = 1;
-                                    xmod_state.x_once_done = false;
                                     prev_weapon = Some(weapon.clone());
                                     prev_acog = acog_enabled;
 
@@ -482,26 +480,28 @@ fn main() {
                                             .unwrap_or(600) as f32;
                                         let timing = (4234.44 / rpm + 2.58).round() as i32;
                                         control.update(x as i32, y as i32, timing, xmod_val);
-                                        let _ = control.current(true);
                                     }
                                 }
 
-                                let (mut x, mut y, mut xmod_val) = settings_io.get_weapon_values(
+                                let (x, y, xmod_val) = settings_io.get_weapon_values(
                                     weapon,
                                     acog_enabled
                                 );
+                                let mut x = x.round() as i32;
+                                let mut y = y.round() as i32;
+                                let mut xmod_val = xmod_val.round() as i32;
 
                                 let mut changed = false;
-                                changed |= ui.slider_config("X", -2.0, 2.0).build(&mut x);
-                                changed |= ui.slider_config("Y", 1.0, 10.0).build(&mut y);
-                                changed |= ui.slider_config("Xmod", -1.0, 2.0).build(&mut xmod_val);
+                                changed |= ui.slider_config("X", -2, 2).build(&mut x);
+                                changed |= ui.slider_config("Y", 1, 10).build(&mut y);
+                                changed |= ui.slider_config("Xmod", -1, 2).build(&mut xmod_val);
 
                                 if changed {
                                     settings_io.save_weapon_values(
                                         weapon,
-                                        x,
-                                        y,
-                                        xmod_val,
+                                        x as f32,
+                                        y as f32,
+                                        xmod_val as f32,
                                         acog_enabled
                                     );
                                     if rcs_enabled {
@@ -510,8 +510,7 @@ fn main() {
                                             .copied()
                                             .unwrap_or(600) as f32;
                                         let timing = (4234.44 / rpm + 2.58).round() as i32;
-                                        control.update(x as i32, y as i32, timing, xmod_val);
-                                        let _ = control.current(true);
+                                        control.update(x, y, timing, xmod_val as f32);
                                     }
                                 }
                             }
@@ -607,10 +606,6 @@ fn main() {
                                 }
                             }
 
-                            let mut toggle_hotkey = settings_io
-                                .get_profile_hotkey("toggle")
-                                .unwrap_or_else(|| "F1".to_string());
-
                             ui.text("Toggle Script:");
 
                             ui.same_line();
@@ -643,10 +638,6 @@ fn main() {
                                 }
                             }
 
-                            let mut hide_hotkey = settings_io
-                                .get_profile_hotkey("hide")
-                                .unwrap_or_else(|| "F2".to_string());
-
                             ui.text("Ghost Mode:");
 
                             ui.same_line();
@@ -678,10 +669,6 @@ fn main() {
                                     capturing_hide = false;
                                 }
                             }
-
-                            let mut always_on_top_hotkey = settings_io
-                                .get_profile_hotkey("always_on_top")
-                                .unwrap_or_else(|| "F3".to_string());
 
                             ui.text("Top most:");
 
@@ -964,10 +951,7 @@ fn main() {
                                 ui.radio_button("GFCK", &mut method, 0) ||
                                 ui.radio_button("GhubMouse", &mut method, 1)
                             {
-                                mouse_input
-                                    .lock()
-                                    .unwrap()
-                                    .set_current(if method == 0 { "GFCK" } else { "GhubMouse" });
+                                mouse_input.set_current(if method == 0 { "GFCK" } else { "GhubMouse" });
                                 settings_io.settings.update("MOUSE", "method", if method == 0 {
                                     "GFCK"
                                 } else {
@@ -977,7 +961,7 @@ fn main() {
                                 log_debug(
                                     &format!(
                                         "Switched mouse input method to: {}",
-                                        mouse_input.lock().unwrap().get_current_name()
+                                        mouse_input.get_current_name()
                                     )
                                 );
                                 mouse_method = method;
