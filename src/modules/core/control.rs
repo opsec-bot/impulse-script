@@ -36,6 +36,9 @@ struct ControlState {
     dpi: i32,
     raw_movement_x: f32,
     raw_movement_y: f32,
+    // Sub-pixel residuals carried between shots for precision.
+    residual_x: f32,
+    residual_y: f32,
 }
 pub struct Control {
     thread: Option<JoinHandle<()>>,
@@ -63,6 +66,8 @@ impl Control {
                     dpi: 800,
                     raw_movement_x: 0.0,
                     raw_movement_y: 0.0,
+                    residual_x: 0.0,
+                    residual_y: 0.0,
                 })
             ),
             mouse_input: None,
@@ -117,7 +122,7 @@ impl Control {
                                     }
                                     1 => {}
                                     _ => {
-                                        x = ((x as f32) * s.move_x_modifier) as i32;
+                                        x = ((x as f32) * s.move_x_modifier).round() as i32;
                                     }
                                 }
 
@@ -157,6 +162,8 @@ impl Control {
         s.x_once_done = false;
         s.raw_movement_x = 0.0;
         s.raw_movement_y = 0.0;
+        s.residual_x = 0.0;
+        s.residual_y = 0.0;
     }
 
     pub fn set_dpi(&mut self, dpi: i32) {
@@ -171,9 +178,9 @@ impl Control {
         state.sensitivity = sensitivity;
     }
 
-    pub fn update(&mut self, x: i32, y: i32, t: i32, x_mod: f32) {
+    pub fn update(&mut self, x: i32, y: i32, t_ms: f32, x_mod: f32) {
         log_debug(
-            &format!("Updating recoil values: X={}, Y={}, Timing={}ms, Xmod={}", x, y, t, x_mod)
+            &format!("Updating recoil values: X={}, Y={}, Timing={:.3}ms, Xmod={}", x, y, t_ms, x_mod)
         );
         let mut s = self.state.lock().unwrap();
         s.stop = true;
@@ -184,7 +191,9 @@ impl Control {
         s.x_once_done = false;
         s.raw_movement_x = x as f32;
         s.raw_movement_y = y as f32;
-        s.timing = (t as f32) / 1000.0;
+        s.residual_x = 0.0;
+        s.residual_y = 0.0;
+        s.timing = t_ms / 1000.0;
         s.move_x_modifier = x_mod;
 
         let (adjusted_x, adjusted_y) = s.calculate_dpi_adjusted_movement();
@@ -206,26 +215,43 @@ impl ControlState {
         #[cfg(not(windows))]
         let is_active = false;
 
+        // Rising edge: trigger just pulled. Reset per-burst state.
+        if is_active && !self.active {
+            self.x_flip = 1;
+            self.x_once_done = false;
+            self.residual_x = 0.0;
+            self.residual_y = 0.0;
+        }
+
         self.active = is_active;
     }
 
-    fn calculate_dpi_adjusted_movement(&self) -> (i32, i32) {
-        let base_sensitivity = 30.0;
+    fn calculate_dpi_adjusted_movement(&mut self) -> (i32, i32) {
+        const BASE_DPI: f32 = 800.0;
+        const BASE_SENSITIVITY: f32 = 30.0;
 
         if self.dpi == 0 {
             return (self.raw_movement_x as i32, self.raw_movement_y as i32);
         }
 
         let sens_scale = if self.sensitivity > 0 {
-            base_sensitivity / (self.sensitivity as f32)
+            BASE_SENSITIVITY / (self.sensitivity as f32)
         } else {
             1.0
         };
 
-        let adjusted_x = self.raw_movement_x * sens_scale;
-        let adjusted_y = self.raw_movement_y * sens_scale;
+        let dpi_scale = BASE_DPI / (self.dpi as f32);
 
-        (adjusted_x.round() as i32, adjusted_y.round() as i32)
+        let target_x = self.raw_movement_x * sens_scale * dpi_scale + self.residual_x;
+        let target_y = self.raw_movement_y * sens_scale * dpi_scale + self.residual_y;
+
+        let out_x = target_x.round() as i32;
+        let out_y = target_y.round() as i32;
+
+        self.residual_x = target_x - out_x as f32;
+        self.residual_y = target_y - out_y as f32;
+
+        (out_x, out_y)
     }
 
 }

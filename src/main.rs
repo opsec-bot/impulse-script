@@ -303,7 +303,7 @@ fn main() {
                                     acog_enabled
                                 );
                                 let rpm = weapon_rpm.get(weapon).copied().unwrap_or(600) as f32;
-                                let timing = (4234.44 / rpm + 2.58).round() as i32;
+                                let timing = 4234.44 / rpm + 2.58;
                                 control.update(x as i32, y as i32, timing, xmod_val);
                             }
                         }
@@ -392,7 +392,7 @@ fn main() {
                                             .get(weapon)
                                             .copied()
                                             .unwrap_or(600) as f32;
-                                        let timing = (4234.44 / rpm + 2.58).round() as i32;
+                                        let timing = 4234.44 / rpm + 2.58;
                                         control.update(x as i32, y as i32, timing, xmod_val);
                                     }
                                 }
@@ -471,7 +471,7 @@ fn main() {
                                             .get(weapon)
                                             .copied()
                                             .unwrap_or(600) as f32;
-                                        let timing = (4234.44 / rpm + 2.58).round() as i32;
+                                        let timing = 4234.44 / rpm + 2.58;
                                         control.update(x as i32, y as i32, timing, xmod_val);
                                     }
                                 }
@@ -502,7 +502,7 @@ fn main() {
                                             .get(weapon)
                                             .copied()
                                             .unwrap_or(600) as f32;
-                                        let timing = (4234.44 / rpm + 2.58).round() as i32;
+                                        let timing = 4234.44 / rpm + 2.58;
                                         control.update(x, y, timing, xmod_val as f32);
                                     }
                                 }
@@ -875,7 +875,7 @@ fn main() {
                                             .get(weapon)
                                             .copied()
                                             .unwrap_or(600) as f32;
-                                        let timing = (4234.44 / rpm + 2.58).round() as i32;
+                                        let timing = 4234.44 / rpm + 2.58;
                                         control.update(x as i32, y as i32, timing, xmod_val);
                                     }
                                 }
@@ -928,7 +928,7 @@ fn main() {
                                                 .get(weapon)
                                                 .copied()
                                                 .unwrap_or(600) as f32;
-                                            let timing = (4234.44 / rpm + 2.58).round() as i32;
+                                            let timing = 4234.44 / rpm + 2.58;
                                             control.update(x as i32, y as i32, timing, xmod_val);
                                         }
                                     }
