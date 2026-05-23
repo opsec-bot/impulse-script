@@ -2,6 +2,7 @@ use super::weapon_data::{ DEFAULT_WEAPONS };
 use super::settings::Settings;
 use super::setup_class::Setup;
 use crate::modules::core::logger::{ log_debug };
+use std::collections::{ BTreeMap, HashMap };
 
 pub struct SettingsIO {
     pub settings: Settings,
@@ -51,12 +52,28 @@ impl SettingsIO {
     }
 
     pub fn get_weapons_by_class(&self) -> std::collections::BTreeMap<String, Vec<String>> {
-        let mut map = std::collections::BTreeMap::new();
+        let mut map = BTreeMap::new();
+        let order_by_weapon: HashMap<&str, usize> = DEFAULT_WEAPONS
+            .iter()
+            .enumerate()
+            .map(|(index, (weapon_name, _, _))| (*weapon_name, index))
+            .collect();
+
         for section in self.get_all_wep() {
             if let Some(class) = self.settings.get(&section, "class") {
                 map.entry(class).or_insert_with(Vec::new).push(section);
             }
         }
+
+        for weapons in map.values_mut() {
+            weapons.sort_by(|left, right| {
+                let left_rank = order_by_weapon.get(left.as_str()).copied().unwrap_or(usize::MAX);
+                let right_rank = order_by_weapon.get(right.as_str()).copied().unwrap_or(usize::MAX);
+
+                left_rank.cmp(&right_rank).then_with(|| left.cmp(right))
+            });
+        }
+
         map
     }
 
