@@ -100,7 +100,7 @@ fn main() {
         eprintln!("Failed to initialize logger: {}", e);
     }
 
-    log_debug("Starting Impulse Scripts v1.0.4");
+    log_debug("Starting Impulse Scripts v1.0.6");
 
     if let Some(log_path) = get_log_file_path() {
         log_debug(&format!("Debug output being written to: {}", log_path.display()));
@@ -263,7 +263,7 @@ fn main() {
     let mut prev_acog = false;
 
     support::simple_init_with_resize(
-        "Impusle Scripts v1.0.4",
+        "Impusle Scripts v1.0.6",
         move |should_run, ui, set_window_size| {
             if ghost_manager.window_handle.is_none() {
                 let _ = ghost_manager.find_and_set_window_handle("Impusle Config");
