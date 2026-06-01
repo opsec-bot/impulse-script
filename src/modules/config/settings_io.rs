@@ -1,4 +1,4 @@
-use super::weapon_data::{ DEFAULT_WEAPONS };
+use super::weapon_data::{ DEFAULT_WEAPONS, stompn_recoil };
 use super::settings::Settings;
 use super::setup_class::Setup;
 use crate::modules::core::logger::{ log_debug };
@@ -29,6 +29,7 @@ impl SettingsIO {
                 ("RCS_HOTKEY", "toggle", "F1".to_string()),
                 ("RCS_HOTKEY", "hide", "F2".to_string()),
                 ("RCS_HOTKEY", "always_on_top", "F3".to_string()),
+                ("RCS_HOTKEY", "mark_key", "XBUTTON1".to_string()),
             ];
 
             for (section, key, value) in initial_settings {
@@ -36,8 +37,9 @@ impl SettingsIO {
             }
 
             for (wep_name, rpm, class) in DEFAULT_WEAPONS {
-                settings.update(wep_name, "X", 0.0);
-                settings.update(wep_name, "Y", 1.0);
+                let (x, y) = stompn_recoil(wep_name).unwrap_or((0.0, 1.0));
+                settings.update(wep_name, "X", x);
+                settings.update(wep_name, "Y", y);
                 settings.update(wep_name, "RPM", *rpm);
                 settings.update(wep_name, "xmod", 0.0);
                 settings.update(wep_name, "class", class);
@@ -92,6 +94,22 @@ impl SettingsIO {
 
     pub fn get_weapon_rpm(&self, wep_name: &str) -> Option<i32> {
         self.settings.get(wep_name, "RPM").and_then(|v| v.parse().ok())
+    }
+
+    /// Overwrite each weapon's X/Y with its STOMPN recoil default. Weapons absent
+    /// from the table are left untouched. Returns how many weapons were updated.
+    pub fn apply_stompn_defaults(&mut self) -> usize {
+        let mut count = 0;
+        for weapon in self.get_all_wep() {
+            if let Some((x, y)) = stompn_recoil(&weapon) {
+                self.settings.update(&weapon, "X", x);
+                self.settings.update(&weapon, "Y", y);
+                count += 1;
+            }
+        }
+        self.settings.write();
+        log_debug(&format!("Applied STOMPN recoil defaults to {} weapons", count));
+        count
     }
 
     pub fn get_weapon_values(&self, wep_name: &str, acog: bool) -> (f32, f32, f32) {
@@ -151,6 +169,105 @@ impl SettingsIO {
         self.settings.write();
     }
 
+    /// Persist a captured recoil pattern (per-shot deltas in capture-time mouse
+    /// counts) for a weapon + sight slot, along with the DPI/sensitivity it was
+    /// captured at (needed to rescale on playback).
+    pub fn save_pattern(
+        &mut self,
+        wep_name: &str,
+        acog: bool,
+        points: &[(i32, i32)],
+        dpi: i32,
+        sens: i32
+    ) {
+        let suffix = if acog { "_acog" } else { "" };
+        let serialized = points
+            .iter()
+            .map(|(x, y)| format!("{},{}", x, y))
+            .collect::<Vec<_>>()
+            .join(";");
+        log_debug(
+            &format!(
+                "Saving pattern for {}{}: {} shots @ {}dpi/{}sens",
+                wep_name,
+                suffix,
+                points.len(),
+                dpi,
+                sens
+            )
+        );
+        self.settings.update(wep_name, &format!("pattern{}", suffix), serialized);
+        self.settings.update(wep_name, &format!("pattern_dpi{}", suffix), dpi);
+        self.settings.update(wep_name, &format!("pattern_sens{}", suffix), sens);
+        self.settings.write();
+    }
+
+    /// Parse a stored pattern back into per-shot deltas. Returns `None` if no
+    /// pattern is saved for this weapon + sight slot.
+    pub fn get_pattern(&self, wep_name: &str, acog: bool) -> Option<Vec<(i32, i32)>> {
+        let suffix = if acog { "_acog" } else { "" };
+        let raw = self.settings.get(wep_name, &format!("pattern{}", suffix))?;
+        let raw = raw.trim().to_string();
+        if raw.is_empty() {
+            return None;
+        }
+        let mut points = Vec::new();
+        for pair in raw.split(';') {
+            let pair = pair.trim();
+            if pair.is_empty() {
+                continue;
+            }
+            let mut it = pair.split(',');
+            let x = it.next().and_then(|v| v.trim().parse::<i32>().ok());
+            let y = it.next().and_then(|v| v.trim().parse::<i32>().ok());
+            if let (Some(x), Some(y)) = (x, y) {
+                points.push((x, y));
+            }
+        }
+        if points.is_empty() { None } else { Some(points) }
+    }
+
+    /// DPI and sensitivity a pattern was captured at. Falls back to the current
+    /// configured DPI and `0` sens (meaning "unknown — assume same") when absent.
+    pub fn get_pattern_meta(&self, wep_name: &str, acog: bool) -> (i32, i32) {
+        let suffix = if acog { "_acog" } else { "" };
+        let dpi = self.settings
+            .get(wep_name, &format!("pattern_dpi{}", suffix))
+            .and_then(|v| v.parse().ok())
+            .unwrap_or_else(|| self.get_dpi());
+        let sens = self.settings
+            .get(wep_name, &format!("pattern_sens{}", suffix))
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        (dpi, sens)
+    }
+
+    /// Per-axis playback scale refinement (defaults to 1.0/1.0).
+    pub fn get_pattern_scale(&self, wep_name: &str, acog: bool) -> (f32, f32) {
+        let suffix = if acog { "_acog" } else { "" };
+        let sx = self.settings
+            .get(wep_name, &format!("pattern_scale_x{}", suffix))
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1.0);
+        let sy = self.settings
+            .get(wep_name, &format!("pattern_scale_y{}", suffix))
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1.0);
+        (sx, sy)
+    }
+
+    pub fn save_pattern_scale(&mut self, wep_name: &str, acog: bool, scale_x: f32, scale_y: f32) {
+        let suffix = if acog { "_acog" } else { "" };
+        self.settings.update(wep_name, &format!("pattern_scale_x{}", suffix), scale_x);
+        self.settings.update(wep_name, &format!("pattern_scale_y{}", suffix), scale_y);
+        self.settings.write();
+    }
+
+    /// Whether a usable pattern exists for this weapon + sight slot.
+    pub fn has_pattern(&self, wep_name: &str, acog: bool) -> bool {
+        self.get_pattern(wep_name, acog).is_some()
+    }
+
     pub fn get_all_wep(&self) -> Vec<String> {
         self.settings
             .sections()
@@ -178,6 +295,14 @@ impl SettingsIO {
     pub fn save_profile_hotkey(&mut self, hotkey_name: &str, value: &str) {
         self.settings.update("RCS_HOTKEY", hotkey_name, value);
         self.settings.write();
+    }
+
+    pub fn get_mark_key(&self) -> Option<String> {
+        self.get_profile_hotkey("mark_key")
+    }
+
+    pub fn save_mark_key(&mut self, value: &str) {
+        self.save_profile_hotkey("mark_key", value);
     }
 
     pub fn get_all_weapon_hotkeys(&self) -> Vec<(String, String)> {
