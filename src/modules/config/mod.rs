@@ -5,4 +5,4 @@ mod weapon_data;
 
 pub use settings_io::SettingsIO;
 pub use setup_class::Setup;
-pub use weapon_data::{ WEAPON_CLASSES, stompn_recoil };
+pub use weapon_data::{ WEAPON_CLASSES, ver2_recoil };

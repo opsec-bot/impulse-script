@@ -6,7 +6,7 @@ use modules::input::MouseInput;
 use std::collections::HashMap;
 use std::time::Duration;
 use modules::ui::support;
-use modules::config::{ Setup, SettingsIO, WEAPON_CLASSES, stompn_recoil };
+use modules::config::{ Setup, SettingsIO, WEAPON_CLASSES, ver2_recoil };
 use modules::core::{
     Control,
     HotkeyHandler,
@@ -52,21 +52,21 @@ impl Drop for TimePeriodGuard {
 /// Which recoil "script" is active. All three feed the same control thread; they
 /// differ only in where the compensation numbers come from:
 /// - `Original`: the weapon's own user-tuned X/Y/Xmod sliders (constant pull).
-/// - `Stompn`:   the STOMPN-seeded X/Y table (constant pull), without touching
+/// - `Ver2`:   the VER2-seeded X/Y table (constant pull), without touching
 ///               the user's saved Original values.
 /// - `Advanced`: the captured per-shot recoil pattern (smoothed playback); falls
 ///               back to Original constant pull when no pattern is saved.
 #[derive(Copy, Clone, PartialEq)]
 enum RcsMode {
     Original,
-    Stompn,
+    Ver2,
     Advanced,
 }
 
 impl RcsMode {
     fn from_i32(v: i32) -> Self {
         match v {
-            1 => RcsMode::Stompn,
+            1 => RcsMode::Ver2,
             2 => RcsMode::Advanced,
             _ => RcsMode::Original,
         }
@@ -74,13 +74,13 @@ impl RcsMode {
     fn as_i32(self) -> i32 {
         match self {
             RcsMode::Original => 0,
-            RcsMode::Stompn => 1,
+            RcsMode::Ver2 => 1,
             RcsMode::Advanced => 2,
         }
     }
     fn from_str(s: &str) -> Self {
         match s {
-            "Stompn" => RcsMode::Stompn,
+            "Ver2" => RcsMode::Ver2,
             "Advanced" => RcsMode::Advanced,
             _ => RcsMode::Original,
         }
@@ -88,7 +88,7 @@ impl RcsMode {
     fn as_str(self) -> &'static str {
         match self {
             RcsMode::Original => "Original",
-            RcsMode::Stompn => "Stompn",
+            RcsMode::Ver2 => "Ver2",
             RcsMode::Advanced => "Advanced",
         }
     }
@@ -221,11 +221,11 @@ fn apply_weapon_recoil(
                 control.update(x as i32, y as i32, timing, xmod);
             }
         }
-        RcsMode::Stompn => {
-            // STOMPN-seeded X/Y, applied live without overwriting the user's
+        RcsMode::Ver2 => {
+            // VER2-seeded X/Y, applied live without overwriting the user's
             // saved Original values. Xmod still comes from the weapon slot.
             let (_, _, xmod) = settings_io.get_weapon_values(weapon, acog);
-            let (x, y) = stompn_recoil(weapon).unwrap_or_else(|| {
+            let (x, y) = ver2_recoil(weapon).unwrap_or_else(|| {
                 let (sx, sy, _) = settings_io.get_weapon_values(weapon, acog);
                 (sx, sy)
             });
@@ -244,7 +244,7 @@ fn main() {
         eprintln!("Failed to initialize logger: {}", e);
     }
 
-    log_debug("Starting Impulse Scripts v1.0.6");
+    log_debug("Starting Impulse Scripts v2.0.0");
 
     if let Some(log_path) = get_log_file_path() {
         log_debug(&format!("Debug output being written to: {}", log_path.display()));
@@ -337,13 +337,13 @@ fn main() {
     let mut previous_sensitivity = sens;
     let mut sens_1x = setup.get_sensitivity_modifier_1() as i32;
     let mut sens_25x = setup.get_sensitivity_modifier_25() as i32;
-    // Global calibration multiplier for all recoil compensation (STOMPN-seeded
+    // Global calibration multiplier for all recoil compensation (VER2-seeded
     // per-weapon defaults are relative; this sets absolute strength once).
     let mut recoil_scale = settings_io.settings
         .get("GAME", "recoil_scale")
         .and_then(|v| v.parse::<f32>().ok())
         .unwrap_or(1.0);
-    // Which recoil script is active (Original / Stompn / Advanced).
+    // Which recoil script is active (Original / Ver2 / Advanced).
     let mut rcs_mode = settings_io.settings
         .get("GAME", "rcs_mode")
         .map(|v| RcsMode::from_str(&v))
@@ -430,7 +430,7 @@ fn main() {
     let mut prev_acog = false;
 
     support::simple_init_with_resize(
-        "Impusle Scripts v1.0.6",
+        "Impusle Scripts v2.0.0",
         move |should_run, ui, set_window_size| {
             if ghost_manager.window_handle.is_none() {
                 let _ = ghost_manager.find_and_set_window_handle("Impusle Config");
@@ -620,7 +620,7 @@ fn main() {
                             let mut mode_changed = false;
                             mode_changed |= ui.radio_button("Original", &mut mode_sel, 0);
                             ui.same_line();
-                            mode_changed |= ui.radio_button("STOMPN", &mut mode_sel, 1);
+                            mode_changed |= ui.radio_button("VER2", &mut mode_sel, 1);
                             ui.same_line();
                             mode_changed |= ui.radio_button("Advanced", &mut mode_sel, 2);
                             if mode_changed {
@@ -647,7 +647,7 @@ fn main() {
                             match rcs_mode {
                                 RcsMode::Original =>
                                     ui.text_disabled("Your own X / Y / Xmod values below."),
-                                RcsMode::Stompn =>
+                                RcsMode::Ver2 =>
                                     ui.text_disabled(
                                         "Built-in recoil table. Tune strength with Recoil Scale."
                                     ),
@@ -721,8 +721,8 @@ fn main() {
                                             }
                                         }
 
-                                        if let Some((sx, sy)) = stompn_recoil(weapon) {
-                                            if ui.button("Copy STOMPN values") {
+                                        if let Some((sx, sy)) = ver2_recoil(weapon) {
+                                            if ui.button("Copy VER2 values") {
                                                 let (_, _, xm) = settings_io.get_weapon_values(
                                                     weapon,
                                                     acog_enabled
@@ -752,8 +752,8 @@ fn main() {
                                             }
                                         }
                                     }
-                                    RcsMode::Stompn => {
-                                        if let Some((sx, sy)) = stompn_recoil(weapon) {
+                                    RcsMode::Ver2 => {
+                                        if let Some((sx, sy)) = ver2_recoil(weapon) {
                                             ui.text(
                                                 format!("Built-in pull:   X {:.0}    Y {:.0}", sx, sy)
                                             );

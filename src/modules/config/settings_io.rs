@@ -1,4 +1,4 @@
-use super::weapon_data::{ DEFAULT_WEAPONS, stompn_recoil };
+use super::weapon_data::{ DEFAULT_WEAPONS, ver2_recoil };
 use super::settings::Settings;
 use super::setup_class::Setup;
 use crate::modules::core::logger::{ log_debug };
@@ -37,7 +37,7 @@ impl SettingsIO {
             }
 
             for (wep_name, rpm, class) in DEFAULT_WEAPONS {
-                let (x, y) = stompn_recoil(wep_name).unwrap_or((0.0, 1.0));
+                let (x, y) = ver2_recoil(wep_name).unwrap_or((0.0, 1.0));
                 settings.update(wep_name, "X", x);
                 settings.update(wep_name, "Y", y);
                 settings.update(wep_name, "RPM", *rpm);
@@ -96,19 +96,19 @@ impl SettingsIO {
         self.settings.get(wep_name, "RPM").and_then(|v| v.parse().ok())
     }
 
-    /// Overwrite each weapon's X/Y with its STOMPN recoil default. Weapons absent
+    /// Overwrite each weapon's X/Y with its VER2 recoil default. Weapons absent
     /// from the table are left untouched. Returns how many weapons were updated.
-    pub fn apply_stompn_defaults(&mut self) -> usize {
+    pub fn apply_ver2_defaults(&mut self) -> usize {
         let mut count = 0;
         for weapon in self.get_all_wep() {
-            if let Some((x, y)) = stompn_recoil(&weapon) {
+            if let Some((x, y)) = ver2_recoil(&weapon) {
                 self.settings.update(&weapon, "X", x);
                 self.settings.update(&weapon, "Y", y);
                 count += 1;
             }
         }
         self.settings.write();
-        log_debug(&format!("Applied STOMPN recoil defaults to {} weapons", count));
+        log_debug(&format!("Applied VER2 recoil defaults to {} weapons", count));
         count
     }
 

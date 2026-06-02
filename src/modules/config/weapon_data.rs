@@ -139,7 +139,7 @@ pub const WEAPON_CLASSES: &[&str] = &[
     "Revolver",
 ];
 
-/// Per-weapon recoil starting values (name, X, Y) mined from the STOMPN Y10S1
+/// Per-weapon recoil starting values (name, X, Y) mined from the VER2 Y10S1
 /// (Attackers) Cronus GPC `GunAntiRecoil` table: averaged across the operators
 /// that carry each gun, scaled by its 95% moveAdj, then normalized — vertical to
 /// the Y `1..10` slider range and horizontal (clamped) to the X `-2..2` range.
@@ -149,7 +149,7 @@ pub const WEAPON_CLASSES: &[&str] = &[
 /// ordering for sprayable classes (AR/SMG/LMG/DMR). Calibrate absolute strength
 /// once with the global Recoil Scale; weapons absent here keep the flat 0/1
 /// default. (Comments show the pre-normalization V/H for transparency.)
-pub const STOMPN_RECOIL: &[(&str, f32, f32)] = &[
+pub const VER2_RECOIL: &[(&str, f32, f32)] = &[
     ("F2", -1.0, 10.0),            // V=60.8 H=-2.8
     ("R4-C", -1.0, 9.2),           // V=56.0 H=-2.8
     ("LMG-E", 1.0, 8.4),           // V=51.3 H=3.3
@@ -189,10 +189,10 @@ pub const STOMPN_RECOIL: &[(&str, f32, f32)] = &[
     ("POF-9", 1.0, 4.5),           // V=27.5 H=2.8
 ];
 
-/// Look up a weapon's STOMPN recoil default. Returns (X, Y) if present.
+/// Look up a weapon's VER2 recoil default. Returns (X, Y) if present.
 /// Case-insensitive: config section names are lowercased by configparser.
-pub fn stompn_recoil(wep_name: &str) -> Option<(f32, f32)> {
-    STOMPN_RECOIL.iter()
+pub fn ver2_recoil(wep_name: &str) -> Option<(f32, f32)> {
+    VER2_RECOIL.iter()
         .find(|(name, _, _)| name.eq_ignore_ascii_case(wep_name))
         .map(|(_, x, y)| (*x, *y))
 }
